@@ -1,0 +1,29 @@
+{
+  "name": "@bpmn-io/release",
+  "version": "0.1.0",
+  "description": "Publish changed packages of an npm monorepo - bpmn.io style.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "bio-release": "bin/release.js"
+  },
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bpmn-io/release.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "index.js"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}

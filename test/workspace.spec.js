@@ -81,6 +81,10 @@ describe('bumpVersion', function() {
       expect(() => bumpVersion('not-a-version', 'patch')).to.throw(/Cannot parse version/);
     });
 
+    it('should throw on an invalid prerelease identifier', function() {
+      expect(() => bumpVersion('1.0.0', 'preminor', 'alpha;rm')).to.throw(/Invalid prerelease identifier/);
+    });
+
   });
 
 });

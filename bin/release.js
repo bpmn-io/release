@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { fileURLToPath } from 'node:url';
+
 import { release, ReleaseError } from '../lib/release.js';
 import { createInteractivePrompter, createScriptedPrompter } from '../lib/prompt.js';
 
@@ -14,7 +16,10 @@ Options:
                        applied to every package ("--bump minor") or a
                        per-package "name=level" (e.g. "--bump @scope/pkg=patch").
                        For "fixed", a single bare level sets the shared bump.
-                       Levels: patch | minor | major | skip.
+                       Levels: patch | minor | major |
+                               premajor | preminor | prepatch | prerelease | skip.
+  --preid <id>         prerelease identifier used with pre* bumps (default: alpha).
+                       E.g. --bump preminor --preid beta → 1.1.0-beta.0
   -y, --yes            skip the confirmation prompt (required for a
                        non-interactive run to actually publish)
   -h, --help           show this help
@@ -23,10 +28,12 @@ Examples:
   bio-release
   bio-release --bump minor --yes
   bio-release --bump @scope/a=patch --bump @scope/b=minor --yes
+  bio-release --bump preminor --preid alpha --yes
+  bio-release --bump prerelease --preid alpha --yes
 `;
 
-function parseArgs(argv) {
-  const opts = { bumps: {}, yes: false, interactive: true };
+export function parseArgs(argv) {
+  const opts = { bumps: {}, preid: 'alpha', yes: false, interactive: true };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -37,6 +44,8 @@ function parseArgs(argv) {
       opts.yes = true;
     } else if (arg === '--cwd') {
       opts.cwd = argv[++i];
+    } else if (arg === '--preid') {
+      opts.preid = argv[++i];
     } else if (arg === '--bump') {
       const value = argv[++i];
       opts.interactive = false;
@@ -66,7 +75,7 @@ async function main() {
 
   const prompter = opts.interactive
     ? createInteractivePrompter()
-    : createScriptedPrompter({ bumps: opts.bumps, bump: opts.defaultBump, yes: opts.yes });
+    : createScriptedPrompter({ bumps: opts.bumps, bump: opts.defaultBump, preid: opts.preid, yes: opts.yes });
 
   await release({
     cwd: opts.cwd,
@@ -74,12 +83,14 @@ async function main() {
   });
 }
 
-try {
-  await main();
-} catch (err) {
-  if (err instanceof ReleaseError) {
-    console.error(err.message);
-    process.exit(1);
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    await main();
+  } catch (err) {
+    if (err instanceof ReleaseError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
   }
-  throw err;
 }

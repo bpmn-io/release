@@ -25,5 +25,12 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "test": "mocha test/**/*.spec.js"
+  },
+  "devDependencies": {
+    "chai": "^5.2.0",
+    "mocha": "^11.0.0"
   }
 }

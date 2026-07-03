@@ -11,6 +11,9 @@
   "exports": {
     ".": "./index.js"
   },
+  "scripts": {
+    "all": "echo \"nothing to run\""
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bpmn-io/release.git"

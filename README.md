@@ -1,5 +1,7 @@
 # @bpmn-io/release
 
+[![CI](https://github.com/bpmn-io/release/actions/workflows/CI.yml/badge.svg)](https://github.com/bpmn-io/release/actions/workflows/CI.yml)
+
 Publish changed packages of an npm monorepo.
 
 Discovers workspace packages from `package.json#workspaces` (globs expanded,

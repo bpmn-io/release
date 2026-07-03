@@ -36,6 +36,26 @@ The strategy is **required** and read from the root `package.json`:
 - **`fixed`** — all packages share one version, detected against the `vX.Y.Z`
   release tag and published together under a single new `vX.Y.Z` tag.
 
+### Commit message
+
+The single release commit defaults to `chore(packages): release` — and
+`chore(packages): release %version` under the `fixed` strategy. Override it via
+`releaseConfig.commitMessage`:
+
+```jsonc
+{
+  "releaseConfig": {
+    "strategy": "fixed",
+    "commitMessage": "chore(packages): release %version"
+  }
+}
+```
+
+The `%version` placeholder is replaced with the `v`-prefixed release version
+(e.g. `v1.2.3`, matching the `vX.Y.Z` release tag) — so the example above yields
+`chore(packages): release v1.2.3`. Because a single shared version only exists
+under the `fixed` strategy, `%version` may **not** be used with `independent`.
+
 ## CLI
 
 ```bash

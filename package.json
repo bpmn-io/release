@@ -28,5 +28,8 @@
   ],
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "nano-spawn": "^2.1.0"
   }
 }

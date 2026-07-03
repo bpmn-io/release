@@ -6,6 +6,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+## 0.2.0
+
 * `FEAT`: support customizing the release commit message via `releaseConfig.commitMessage` ([#3](https://github.com/bpmn-io/release/pull/3))
 * `FEAT`: include version in default fixed strategy release commit message ([#3](https://github.com/bpmn-io/release/pull/3))
 * `CHORE`: execute commands with explicit argument passing ([#3](https://github.com/bpmn-io/release/pull/3))

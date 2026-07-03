@@ -8,6 +8,9 @@ ___Note:__ Yet to be released changes appear here._
 
 * `FEAT`: support customizing the release commit message via `releaseConfig.commitMessage` ([#3](https://github.com/bpmn-io/release/pull/3))
 * `FEAT`: include version in default fixed strategy release commit message ([#3](https://github.com/bpmn-io/release/pull/3))
+* `CHORE`: execute commands with explicit argument passing ([#3](https://github.com/bpmn-io/release/pull/3))
+* `FIX`: correctly handle directories with whitespace ([#3](https://github.com/bpmn-io/release/pull/3))
+* `DEPS`: depend on `nano-spawn` ([#3](https://github.com/bpmn-io/release/pull/3))
 
 ## 0.1.0
 

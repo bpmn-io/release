@@ -1,0 +1,7 @@
+{
+  "name": "@fix/root",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}

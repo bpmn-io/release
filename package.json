@@ -12,7 +12,8 @@
     ".": "./index.js"
   },
   "scripts": {
-    "all": "echo \"nothing to run\""
+    "all": "npm test",
+    "test": "node --test"
   },
   "repository": {
     "type": "git",

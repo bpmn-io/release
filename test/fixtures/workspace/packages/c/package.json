@@ -1,0 +1,7 @@
+{
+  "name": "@fix/c",
+  "version": "1.0.0",
+  "dependencies": {
+    "@fix/a": "^1.0.0"
+  }
+}

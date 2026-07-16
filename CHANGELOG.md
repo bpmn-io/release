@@ -6,6 +6,11 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+## 0.3.0
+
+* `FEAT`: support prereleases ([#1](https://github.com/bpmn-io/release/issues/1), [#4](https://github.com/bpmn-io/release/issues/4))
+* `FIX`: correctly pass commit message to release runner ([#5](https://github.com/bpmn-io/release/pull/5))
+
 ## 0.2.0
 
 * `FEAT`: support customizing the release commit message via `releaseConfig.commitMessage` ([#3](https://github.com/bpmn-io/release/pull/3))

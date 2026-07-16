@@ -14,7 +14,13 @@ Options:
                        applied to every package ("--bump minor") or a
                        per-package "name=level" (e.g. "--bump @scope/pkg=patch").
                        For "fixed", a single bare level sets the shared bump.
-                       Levels: patch | minor | major | skip.
+                       Levels: patch | minor | major |
+                               premajor | preminor | prepatch | prerelease | skip.
+  --preid <id>         pre-release identifier for pre* bumps (default: alpha),
+                       e.g. "alpha", "beta", "rc", "next".
+  --dist-tag <tag>     npm dist-tag to publish under. Defaults to "latest" for
+                       stable versions. A pre-release has no default: it requires
+                       an explicit, non-"latest" dist-tag (e.g. --dist-tag next).
   -y, --yes            skip the confirmation prompt (required for a
                        non-interactive run to actually publish)
   -h, --help           show this help
@@ -23,6 +29,8 @@ Examples:
   bio-release
   bio-release --bump minor --yes
   bio-release --bump @scope/a=patch --bump @scope/b=minor --yes
+  bio-release --bump preminor --preid alpha --yes
+  bio-release --bump prerelease --preid beta --dist-tag beta --yes
 `;
 
 function parseArgs(argv) {
@@ -37,6 +45,10 @@ function parseArgs(argv) {
       opts.yes = true;
     } else if (arg === '--cwd') {
       opts.cwd = argv[++i];
+    } else if (arg === '--preid') {
+      opts.preid = argv[++i];
+    } else if (arg === '--dist-tag') {
+      opts.distTag = argv[++i];
     } else if (arg === '--bump') {
       const value = argv[++i];
       opts.interactive = false;
@@ -65,11 +77,12 @@ async function main() {
   }
 
   const prompter = opts.interactive
-    ? createInteractivePrompter()
-    : createScriptedPrompter({ bumps: opts.bumps, bump: opts.defaultBump, yes: opts.yes });
+    ? createInteractivePrompter({ defaultPreid: opts.preid, defaultDistTag: opts.distTag })
+    : createScriptedPrompter({ bumps: opts.bumps, bump: opts.defaultBump, preid: opts.preid, yes: opts.yes });
 
   await release({
     cwd: opts.cwd,
+    distTag: opts.distTag,
     prompter
   });
 }

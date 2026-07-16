@@ -16,6 +16,7 @@ test('resolveDistTag', async (t) => {
   });
 
   await t.test('lets a stable version publish to a non-latest tag (intended)', () => {
+
     // a global --dist-tag also redirects stable packages off `latest`
     assert.equal(resolveDistTag('1.2.3', 'beta'), 'beta');
   });

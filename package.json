@@ -12,7 +12,8 @@
     ".": "./index.js"
   },
   "scripts": {
-    "all": "npm test",
+    "all": "npm run lint && npm test",
+    "lint": "eslint .",
     "test": "node --test"
   },
   "repository": {
@@ -32,5 +33,9 @@
   },
   "dependencies": {
     "nano-spawn": "^2.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4",
+    "eslint-plugin-bpmn-io": "^2.3.1"
   }
 }

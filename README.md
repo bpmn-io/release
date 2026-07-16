@@ -65,7 +65,31 @@ npx @bpmn-io/release
 # non-interactive (CI)
 npx @bpmn-io/release --bump minor --yes
 npx @bpmn-io/release --bump @scope/a=patch --bump @scope/b=minor --yes
+
+# non-interactive: cut 1.3.0-alpha.0 under dist-tag "next"
+npx @bpmn-io/release --bump preminor --preid alpha --dist-tag next --yes
 ```
+
+## Pre-releases
+
+You can safely cut an `alpha` / `rc` release either through interactive
+selection (you are asked for the pre-release identifier and dist-tag) or
+non-interactively by passing a `--preid` alongside an explicit, non-`latest`
+`--dist-tag` to publish under.
+
+Pre-release bump levels start or advance a pre-release, and plain `patch` /
+`minor` / `major` on a pre-release *graduate* it to the final version:
+
+| current | bump (`--preid alpha`) | result |
+| --- | --- | --- |
+| `1.2.3` | `preminor` | `1.3.0-alpha.0` |
+| `1.3.0-alpha.0` | `prerelease` | `1.3.0-alpha.1` |
+| `1.3.0-alpha.1` | `minor` (graduate) | `1.3.0` |
+
+Because publishing a pre-release move (graduating, or re-cutting after a botched
+publish) may not touch any code since the last release tag, a package sitting on
+a pre-release version is always offered for release — the usual "nothing changed,
+skip it" gate does not apply while a pre-release is in progress.
 
 ## Programmatic API
 
@@ -75,7 +99,8 @@ import { release, createScriptedPrompter } from '@bpmn-io/release';
 const result = await release({
   cwd: process.cwd(),          // repository root
   logger: console,             // any { log, warn, error }
-  prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+  distTag: 'next',             // required for pre-releases; never `latest`
+  prompter: createScriptedPrompter({ bump: 'preminor', preid: 'alpha', yes: true })
 });
 
 // {
@@ -88,14 +113,20 @@ A **prompter** drives interactive decisions:
 
 ```js
 {
-  bump({ name, currentVersion }): 'patch' | 'minor' | 'major' | 'skip',
+  bump({ name, currentVersion }): { type, preid, distTag } | 'skip',
   confirm({ plan, strategy }): boolean,
   close(): void
 }
 ```
 
-`createInteractivePrompter()` (readline, the default) and
-`createScriptedPrompter({ bumps, bump, yes })` (head-less) are provided.
+`type` is one of `patch | minor | major | premajor | preminor | prepatch |
+prerelease`, `preid` (e.g. `alpha`) is the pre-release identifier used by the
+`pre*` types, and `distTag` is the npm dist-tag chosen for a pre-release (never
+`latest`; omit it for a stable bump to default to `latest`).
+
+`createInteractivePrompter({ defaultPreid, defaultDistTag })` (readline, the
+default) and `createScriptedPrompter({ bumps, bump, preid, yes })` (head-less)
+are provided.
 
 `release()` returns its result rather than calling `process.exit`, and throws a
 `ReleaseError` for expected failures (dirty tree, missing npm auth, missing

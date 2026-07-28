@@ -4,6 +4,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ## Unreleased
 
+___Note:__ Yet to be released changes appear here._
+
 * `FEAT`: under the `fixed` strategy, only release packages that changed since the baseline tag (plus their dependents); leave unchanged packages at their current version instead of republishing every package each release
 
 ## 0.3.0

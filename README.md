@@ -33,8 +33,11 @@ The strategy is **required** and read from the root `package.json`:
 
 - **`independent`** — each package is versioned and released on its own; tags are
   `name@version`. Dependents cascade in when a workspace dependency is released.
-- **`fixed`** — all packages share one version, detected against the `vX.Y.Z`
-  release tag and published together under a single new `vX.Y.Z` tag.
+- **`fixed`** — released packages share one version, detected against the `vX.Y.Z`
+  release tag and published together under a single new `vX.Y.Z` tag. Only packages
+  that changed since the baseline (plus the dependents they cascade in) are
+  released; unchanged packages keep their current version and rejoin the shared
+  version the next time they change.
 
 ### Commit message
 

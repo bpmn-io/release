@@ -309,6 +309,40 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('fixed — a shared pre-release does not drag in left-behind stable packages', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@fix/a', version: '1.5.0-alpha.0' },
+      'packages/b': { name: '@fix/b', version: '1.1.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.5.0-alpha.0' ], '@fix/b': [ '1.1.0' ] },
+      tags: [ 'v1.5.0-alpha.0' ],
+      changes: { 'packages/a': [], 'packages/b': [] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      // only the package already on a pre-release graduates; the stable package
+      // left behind at an older version is not pulled into the pre-release train
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '1.5.0' } ]);
+      assert.deepEqual(result.skipped, [ '@fix/b' ]);
+      assert.deepEqual(result.tags, [ 'v1.5.0' ]);
+
+      const b = readJSON(join(cwd, 'packages/b', 'package.json'));
+      assert.equal(b.version, '1.1.0');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('fixed — reports nothing to publish when only unchanged packages remain', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },

@@ -101,8 +101,8 @@ test('release (end-to-end)', async (t) => {
   await t.test('independent — releases a changed package and cascades to its dependent', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
-      'packages/a': { name: '@fix/a', version: '1.0.0' },
-      'packages/c': { name: '@fix/c', version: '1.0.0', dependencies: { '@fix/a': '^1.0.0' } }
+      'packages/a': { name: '@fix/a', version: '1.0.0', scripts: { all: 'exit 0' } },
+      'packages/c': { name: '@fix/c', version: '1.0.0', scripts: { all: 'exit 0' }, dependencies: { '@fix/a': '^1.0.0' } }
     });
 
     const run = createRunner({
@@ -273,8 +273,8 @@ test('release (end-to-end)', async (t) => {
   await t.test('fixed — private packages are versioned + tagged but never published', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
-      'packages/a': { name: '@app/a', version: '1.0.0', private: true },
-      'packages/b': { name: '@app/b', version: '1.0.0', private: true }
+      'packages/a': { name: '@app/a', version: '1.0.0', private: true, scripts: { all: 'exit 0' } },
+      'packages/b': { name: '@app/b', version: '1.0.0', private: true, scripts: { all: 'exit 0' } }
     });
 
     // no npmVersions: a private package's baseline comes from package.json,
@@ -385,7 +385,7 @@ test('release (end-to-end)', async (t) => {
   await t.test('fixed — leaves an unchanged, independent package behind', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
-      'packages/a': { name: '@fix/a', version: '1.4.0' },
+      'packages/a': { name: '@fix/a', version: '1.4.0', scripts: { all: 'exit 0' } },
       'packages/b': { name: '@fix/b', version: '1.1.0' }
     });
 
@@ -416,6 +416,144 @@ test('release (end-to-end)', async (t) => {
       // its version on disk is untouched
       const b = readJSON(join(cwd, 'packages/b', 'package.json'));
       assert.equal(b.version, '1.1.0');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — forceRelease releases even unchanged packages together', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@fix/a', version: '1.4.0', scripts: { all: 'exit 0' } },
+      'packages/b': { name: '@fix/b', version: '1.4.0', scripts: { all: 'exit 0' } }
+    });
+
+    // only @fix/a has changes since the baseline; without forceRelease, @fix/b
+    // would be left behind (see the test above)
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.4.0' ], '@fix/b': [ '1.4.0' ] },
+      tags: [ 'v1.4.0' ],
+      changes: { 'packages/a': [ 'feat: only a moved' ], 'packages/b': [] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        forceRelease: true,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      // both move together to the shared version under one tag
+      assert.deepEqual(result.released, [
+        { name: '@fix/a', version: '1.5.0' },
+        { name: '@fix/b', version: '1.5.0' }
+      ]);
+      assert.deepEqual(result.skipped, []);
+      assert.deepEqual(result.tags, [ 'v1.5.0' ]);
+      assert.deepEqual(commands(run, 'npm version'), [
+        'npm version 1.5.0 --no-git-tag-version',
+        'npm version 1.5.0 --no-git-tag-version'
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('independent — forceRelease releases an untagged and an unchanged package', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0', scripts: { all: 'exit 0' } },
+      'packages/b': { name: '@fix/b', version: '2.0.0', scripts: { all: 'exit 0' } }
+    });
+
+    // @fix/a is published but has no git tag — normally skipped with a warning;
+    // @fix/b is tagged but unchanged — normally left behind. forceRelease
+    // bypasses both the untagged skip and change detection.
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ], '@fix/b': [ '2.0.0' ] },
+      tags: [ '@fix/b@2.0.0' ],
+      changes: { 'packages/a': [], 'packages/b': [] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        forceRelease: true,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      // both release under their own tags despite the missing tag / no changes
+      assert.deepEqual(result.released, [
+        { name: '@fix/a', version: '1.1.0' },
+        { name: '@fix/b', version: '2.1.0' }
+      ]);
+      assert.deepEqual(result.skipped, []);
+      assert.deepEqual(commands(run, 'git tag'), [ 'git tag @fix/a@1.1.0', 'git tag @fix/b@2.1.0' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — skips the build (with no side effects) for a package without an "all" script', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '1.0.0', private: true },
+      'packages/b': { name: '@app/b', version: '1.0.0', private: true }
+    });
+
+    const run = createRunner({
+      tags: [ 'v1.0.0' ],
+      changes: { 'packages/a': [ 'feat: a' ], 'packages/b': [ 'feat: b' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      // neither package has an `all` script, so nothing is built — but both are
+      // still versioned and tagged
+      assert.deepEqual(commands(run, 'npm run all'), []);
+      assert.deepEqual(result.released, [
+        { name: '@app/a', version: '1.1.0' },
+        { name: '@app/b', version: '1.1.0' }
+      ]);
+      assert.deepEqual(result.tags, [ 'v1.1.0' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — build:false skips the build even when an "all" script exists', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '1.0.0', private: true, scripts: { all: 'exit 0' } },
+      'packages/b': { name: '@app/b', version: '1.0.0', private: true, scripts: { all: 'exit 0' } }
+    });
+
+    const run = createRunner({
+      tags: [ 'v1.0.0' ],
+      changes: { 'packages/a': [ 'feat: a' ], 'packages/b': [ 'feat: b' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        build: false,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.deepEqual(commands(run, 'npm run all'), []);
+      assert.deepEqual(result.tags, [ 'v1.1.0' ]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

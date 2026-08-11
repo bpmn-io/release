@@ -76,6 +76,12 @@ npx @bpmn-io/release --bump preminor --preid alpha --dist-tag next --yes
 
 # exclude private packages from the release entirely
 npx @bpmn-io/release --no-private --bump minor --yes
+
+# force every eligible package to release, even ones without changes
+npx @bpmn-io/release --force-release --bump minor --yes
+
+# skip the per-package build step entirely
+npx @bpmn-io/release --no-build --bump minor --yes
 ```
 
 For all flags, run `npx @bpmn-io/release --help`.
@@ -90,6 +96,22 @@ version bump and a git tag to drive the actual release (e.g. through a CI
 pipeline build). With a `fixed` strategy this covers the common "bump everything,
 tag it, publish nothing" case. Pass `--no-private` to leave private packages out
 of the release entirely.
+
+## Force release
+
+By default a package is only released if it changed since its last release tag.
+Pass `--force-release` to release every eligible package regardless of whether it
+changed. This is what you want when a set of packages form a single product that
+must always move in lock-step under one shared version — e.g. a `fixed`-strategy
+monorepo where a change to just one workspace should still bump and tag them all.
+
+## Build step
+
+Before a package is published (or tagged) its `all` npm script is run as a build
+gate. This step is optional:
+
+- if a package has no `all` script it is skipped, with a warning;
+- pass `--no-build` to skip the build for every package regardless.
 
 ## Pre-releases
 

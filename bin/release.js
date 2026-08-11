@@ -24,6 +24,12 @@ Options:
   --no-private         exclude private packages from the release entirely. By
                        default they are versioned, committed and tagged like any
                        other package, but never published to the registry.
+  --force-release      release every eligible package, bypassing change
+                       detection. Use for a monorepo whose packages must
+                       always move together.
+  --no-build           skip the build step ("npm run all") for all packages.
+                       A package without an "all" script is skipped anyway,
+                       with a warning.
   -y, --yes            skip the confirmation prompt (required for a
                        non-interactive run to actually publish)
   -h, --help           show this help
@@ -37,7 +43,7 @@ Examples:
 `;
 
 function parseArgs(argv) {
-  const opts = { bumps: {}, yes: false, interactive: true };
+  const opts = { bumps: {}, yes: false, interactive: true, build: true };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -54,6 +60,10 @@ function parseArgs(argv) {
       opts.distTag = argv[++i];
     } else if (arg === '--no-private') {
       opts.excludePrivate = true;
+    } else if (arg === '--force-release') {
+      opts.forceRelease = true;
+    } else if (arg === '--no-build') {
+      opts.build = false;
     } else if (arg === '--bump') {
       const value = argv[++i];
       opts.interactive = false;
@@ -89,6 +99,8 @@ async function main() {
     cwd: opts.cwd,
     distTag: opts.distTag,
     excludePrivate: opts.excludePrivate,
+    forceRelease: opts.forceRelease,
+    build: opts.build,
     prompter
   });
 }

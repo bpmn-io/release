@@ -21,6 +21,9 @@ Options:
   --dist-tag <tag>     npm dist-tag to publish under. Defaults to "latest" for
                        stable versions. A pre-release has no default: it requires
                        an explicit, non-"latest" dist-tag (e.g. --dist-tag next).
+  --no-private         exclude private packages from the release entirely. By
+                       default they are versioned, committed and tagged like any
+                       other package, but never published to the registry.
   -y, --yes            skip the confirmation prompt (required for a
                        non-interactive run to actually publish)
   -h, --help           show this help
@@ -49,6 +52,8 @@ function parseArgs(argv) {
       opts.preid = argv[++i];
     } else if (arg === '--dist-tag') {
       opts.distTag = argv[++i];
+    } else if (arg === '--no-private') {
+      opts.excludePrivate = true;
     } else if (arg === '--bump') {
       const value = argv[++i];
       opts.interactive = false;
@@ -83,6 +88,7 @@ async function main() {
   await release({
     cwd: opts.cwd,
     distTag: opts.distTag,
+    excludePrivate: opts.excludePrivate,
     prompter
   });
 }

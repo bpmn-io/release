@@ -43,18 +43,29 @@ function createWorkspace(pkgs) {
  *   tags?: string[],
  *   changes?: Record<string, string[]>,
  *   whoami?: string|null,
- *   clean?: boolean
+ *   clean?: boolean,
+ *   staleAfterInstall?: boolean
  * }} [world]
  */
-function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true } = {}) {
+function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true, staleAfterInstall = false } = {}) {
   const calls = [];
+  let installed = false;
 
   async function run(file, args = [], opts = {}) {
     calls.push({ file, args: [ ...args ], opts, cmd: [ file, ...args ].join(' ') });
 
-    // pre-flight: working tree status
+    // pre-flight: working tree status. A clean tree can still go dirty once
+    // `npm install` refreshes a stale lockfile — modelled via staleAfterInstall.
     if (file === 'git' && args[0] === 'status') {
-      return clean ? '' : ' M packages/a/index.js';
+      if (!clean) return ' M packages/a/index.js';
+      if (staleAfterInstall && installed) return ' M package-lock.json';
+      return '';
+    }
+
+    // pre-flight: node_modules install (records that it ran)
+    if (file === 'npm' && args[0] === 'install') {
+      installed = true;
+      return '';
     }
 
     // pre-flight: npm authentication
@@ -771,6 +782,25 @@ test('release (end-to-end)', async (t) => {
       await assert.rejects(
         release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
         (err) => err instanceof ReleaseError && /Not authenticated with npm/.test(err.message)
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('pre-flight — rejects a stale lockfile', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    // clean tree up front, but `npm install` dirties it → lockfile was stale
+    const run = createRunner({ staleAfterInstall: true });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
+        (err) => err instanceof ReleaseError && /Lockfile is out of date/.test(err.message)
       );
     } finally {
       rmSync(cwd, { recursive: true, force: true });

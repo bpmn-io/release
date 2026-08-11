@@ -100,6 +100,7 @@ distinct from a release. It stamps versions onto every workspace package
 
 - **no commit, no git tag, no push**
 - **no prompt, no build, no publish**
+- **lockfile only** — `npm install --package-lock-only`, so `node_modules` is left untouched
 
 Where a **release** *decides* versions, commits, tags and (optionally) builds and
 publishes, **version** only writes versions you already decided onto disk. That
@@ -248,7 +249,8 @@ await setVersion('minor', {
 `setVersion(defaultSpec, options)` resolves a target version per package —
 `defaultSpec` applies to every discovered package, `options.overrides[name]`
 targets specific ones — then stamps it, pins internal workspace dependency ranges
-to `^<version>` and runs a single `npm install`. No commit, tag, prompt, build or
+to `^<version>` and runs a single `npm install --package-lock-only` (lockfile
+only, never `node_modules`). No commit, tag, prompt, build or
 publish. A spec is an explicit version (`1.2.3`, `1.2.0-nightly.0`) or a bump
 level (`patch`, `minor`, …). Throws a `ReleaseError` for an invalid spec or an
 override naming an unknown package (nothing is mutated in that case).

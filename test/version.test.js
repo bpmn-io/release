@@ -80,12 +80,12 @@ test('setVersion', async (t) => {
         { name: '@fix/b', version: '1.2.0-nightly.0' }
       ]);
 
-      // every package (incl. private) got stamped, npm install ran once
+      // every package (incl. private) got stamped, the lockfile got refreshed
       assert.deepEqual(commands(run, 'npm version'), [
         'npm version 1.2.0-nightly.0 --no-git-tag-version',
         'npm version 1.2.0-nightly.0 --no-git-tag-version'
       ]);
-      assert.deepEqual(commands(run, 'npm install'), [ 'npm install' ]);
+      assert.deepEqual(commands(run, 'npm install'), [ 'npm install --package-lock-only' ]);
 
       // no git, no publish, no whoami
       assert.deepEqual(commands(run, 'git'), []);
@@ -218,7 +218,7 @@ test('setVersion', async (t) => {
       // only the package that actually changes is stamped — no partial mutation,
       // no "Version not changed" throw from npm
       assert.deepEqual(commands(run, 'npm version'), [ 'npm version 2.0.0 --no-git-tag-version' ]);
-      assert.deepEqual(commands(run, 'npm install'), [ 'npm install' ]);
+      assert.deepEqual(commands(run, 'npm install'), [ 'npm install --package-lock-only' ]);
 
       // both end at the target on disk
       assert.equal(readJSON(join(cwd, 'packages/a', 'package.json')).version, '2.0.0');

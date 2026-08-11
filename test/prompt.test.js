@@ -131,6 +131,15 @@ test('createScriptedPrompter', async (t) => {
     assert.equal(await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }), 'skip');
   });
 
+  await t.test('accepts an explicit version as a decision', async () => {
+    const prompter = createScriptedPrompter({ bumps: { '@test/a': '1.2.3' }, bump: 'minor' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.0.0' }),
+      { type: '1.2.3', preid: 'alpha' }
+    );
+  });
+
   await t.test('throws on an invalid bump level', async () => {
     const prompter = createScriptedPrompter({ bump: 'mega' });
 

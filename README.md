@@ -82,9 +82,51 @@ npx @bpmn-io/release --force-release --bump minor --yes
 
 # skip the per-package build step entirely
 npx @bpmn-io/release --no-build --bump minor --yes
+
+# version-only: stamp an explicit version onto every package (no commit/tag/publish)
+npx @bpmn-io/release version 1.2.0-nightly.0
 ```
 
 For all flags, run `npx @bpmn-io/release --help`.
+
+## Version command
+
+`bio-release version <spec...>` is the pure **version** primitive, deliberately
+distinct from a release. It stamps versions onto every workspace package
+(including `private` ones) and reconciles the lockfile — and does nothing else:
+
+- **no commit, no git tag, no push**
+- **no prompt, no build, no publish**
+
+Where a **release** *decides* versions, commits, tags and (optionally) builds and
+publishes, **version** only writes versions you already decided onto disk. That
+makes it the right tool for a CI/nightly pipeline that needs to stamp a version
+(e.g. `1.2.0-nightly.20250811`) across its workspaces before building artifacts —
+replacing hand-rolled `set-version` scripts.
+
+A spec is either an **explicit** semver version (e.g. `1.2.3`,
+`1.2.0-nightly.0` — used verbatim) or a **bump level** (`patch`, `minor`,
+`major`, `premajor`, `preminor`, `prepatch`, `prerelease` — resolved off the
+package's current version). A bare spec applies to every package; a `name=spec`
+targets a specific one (and wins over the bare default). Packages left without a
+spec are untouched.
+
+```bash
+# stamp 1.2.0-nightly.0 onto every workspace package, refresh the lockfile
+npx @bpmn-io/release version 1.2.0-nightly.0
+
+# stamp only the public packages
+npx @bpmn-io/release version 1.2.3 --no-private
+
+# bump every package by one minor, resolved off its current version
+npx @bpmn-io/release version minor
+
+# per-package: an explicit version for one, a level for another
+npx @bpmn-io/release version @scope/a=1.2.3 @scope/b=minor
+```
+
+Internal workspace dependency ranges are pinned to `^<version>` as part of the
+stamp. Run `npx @bpmn-io/release version --help` for all flags.
 
 ## Private packages
 
@@ -174,6 +216,40 @@ are provided.
 `release()` returns its result rather than calling `process.exit`, and throws a
 `ReleaseError` for expected failures (dirty tree, missing npm auth, missing
 strategy). The CLI translates those into a non-zero exit.
+
+### `setVersion`
+
+For the version-only primitive, use `setVersion`:
+
+```js
+import { setVersion } from '@bpmn-io/release';
+
+// stamp one version onto every package
+const stamped = await setVersion('1.2.0-nightly.0', {
+  cwd: process.cwd(),      // repository root
+  logger: console,         // any { log, warn }
+  excludePrivate: false    // stamp private packages too (default)
+});
+
+// [{ name, version }]
+
+// or resolve per-package specs (explicit versions or bump levels)
+await setVersion('minor', {
+  overrides: { '@scope/a': '1.2.3' },  // wins over the default for @scope/a
+  preid: 'alpha'                       // identifier for pre* levels
+});
+```
+
+`setVersion(defaultSpec, options)` resolves a target version per package —
+`defaultSpec` applies to every discovered package, `options.overrides[name]`
+targets specific ones — then stamps it, pins internal workspace dependency ranges
+to `^<version>` and runs a single `npm install`. No commit, tag, prompt, build or
+publish. A spec is an explicit version (`1.2.3`, `1.2.0-nightly.0`) or a bump
+level (`patch`, `minor`, …). Throws a `ReleaseError` for an invalid spec or an
+override naming an unknown package (nothing is mutated in that case).
+
+The spec resolver is also exported as `resolveVersion(spec, current, preid)`,
+shared with `release()` so both accept the same grammar.
 
 ## License
 

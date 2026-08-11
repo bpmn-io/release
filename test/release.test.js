@@ -270,6 +270,118 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('fixed — private packages are versioned + tagged but never published', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '1.0.0', private: true },
+      'packages/b': { name: '@app/b', version: '1.0.0', private: true }
+    });
+
+    // no npmVersions: a private package's baseline comes from package.json,
+    // never the registry
+    const run = createRunner({
+      tags: [ 'v1.0.0' ],
+      changes: { 'packages/a': [ 'feat: a' ], 'packages/b': [ 'feat: b' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.deepEqual(result.released, [
+        { name: '@app/a', version: '1.1.0' },
+        { name: '@app/b', version: '1.1.0' }
+      ]);
+      assert.deepEqual(result.tags, [ 'v1.1.0' ]);
+
+      // both are versioned, built and tagged — but never published, and neither
+      // npm auth nor the registry is ever consulted for a private-only release
+      assert.deepEqual(commands(run, 'npm version'), [
+        'npm version 1.1.0 --no-git-tag-version',
+        'npm version 1.1.0 --no-git-tag-version'
+      ]);
+      assert.deepEqual(commands(run, 'npm run all'), [ 'npm run all', 'npm run all' ]);
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(commands(run, 'npm whoami'), []);
+      assert.deepEqual(commands(run, 'npm view'), []);
+      assert.deepEqual(commands(run, 'git tag'), [ 'git tag v1.1.0' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — private packages are excluded when excludePrivate is set', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '1.0.0', private: true }
+    });
+
+    const run = createRunner({ tags: [ 'v1.0.0' ], changes: { 'packages/a': [ 'feat: a' ] } });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        excludePrivate: true,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      // nothing discovered → nothing released
+      assert.deepEqual(result.released, []);
+      assert.deepEqual(commands(run, 'git tag'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('independent — a private package is tagged but not published alongside public ones', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' },
+      'packages/b': { name: '@priv/b', version: '2.0.0', private: true }
+    });
+
+    const run = createRunner({
+
+      // only the public package is on npm; both are tagged in git
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0', '@priv/b@2.0.0' ],
+      changes: { 'packages/a': [ 'feat: a' ], 'packages/b': [ 'feat: b' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.deepEqual(result.released, [
+        { name: '@fix/a', version: '1.1.0' },
+        { name: '@priv/b', version: '2.1.0' }
+      ]);
+      assert.deepEqual(result.tags, [ '@fix/a@1.1.0', '@priv/b@2.1.0' ]);
+
+      // only the public package is published; both are tagged
+      assert.deepEqual(commands(run, 'npm publish'), [ 'npm publish' ]);
+      assert.deepEqual(commands(run, 'git tag'), [ 'git tag @fix/a@1.1.0', 'git tag @priv/b@2.1.0' ]);
+
+      // npm auth is still required because a public package publishes
+      assert.deepEqual(commands(run, 'npm whoami'), [ 'npm whoami' ]);
+
+      // the private package's npm registry is never consulted
+      assert.deepEqual(commands(run, 'npm view'), [ 'npm view @fix/a versions --json' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('fixed — leaves an unchanged, independent package behind', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },

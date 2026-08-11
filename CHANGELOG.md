@@ -6,6 +6,12 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FEAT`: version + tag private packages by default (never publishing them); add `--no-private` to exclude them from the release entirely ([#9](https://github.com/bpmn-io/release/pull/9))
+
+### Breaking Changes
+
+* private packages are now included in the release by default (versioned + tagged, never published). Use `--no-private` flag to switch back to the old behavior
+
 ## 0.4.0
 
 * `FEAT`: under the `fixed` strategy, only release packages that changed since the baseline tag (plus their dependents) ([#8](https://github.com/bpmn-io/release/pull/8))

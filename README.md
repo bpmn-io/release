@@ -4,8 +4,10 @@
 
 Publish changed packages of an npm monorepo.
 
-Discovers workspace packages from `package.json#workspaces` (globs expanded,
-private packages skipped), orders them topologically, detects what changed since
+Discovers workspace packages from `package.json#workspaces` (globs expanded;
+private packages are included by default, versioned + tagged but never
+published, unless `--no-private` is set), orders them
+topologically, detects what changed since
 the last release, asks for a version bump per package, then applies every bump in
 a single commit and publishes + tags each package against that one commit.
 
@@ -71,7 +73,23 @@ npx @bpmn-io/release --bump @scope/a=patch --bump @scope/b=minor --yes
 
 # non-interactive: cut 1.3.0-alpha.0 under dist-tag "next"
 npx @bpmn-io/release --bump preminor --preid alpha --dist-tag next --yes
+
+# exclude private packages from the release entirely
+npx @bpmn-io/release --no-private --bump minor --yes
 ```
+
+For all flags, run `npx @bpmn-io/release --help`.
+
+## Private packages
+
+By default private packages (`"private": true` in their `package.json`) are
+versioned, committed and tagged alongside the public ones — they are just never
+published to the registry. This is useful for monorepos whose deployable
+artifacts (apps, bundles) live in private workspaces but still need a shared
+version bump and a git tag to drive the actual release (e.g. through a CI
+pipeline build). With a `fixed` strategy this covers the common "bump everything,
+tag it, publish nothing" case. Pass `--no-private` to leave private packages out
+of the release entirely.
 
 ## Pre-releases
 

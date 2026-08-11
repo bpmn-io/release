@@ -209,15 +209,17 @@ test('discoverPackages', async (t) => {
 
   const rootPkg = readJSON(join(WORKSPACE_FIXTURE, 'package.json'));
 
-  await t.test('discovers non-private workspace packages', () => {
+  await t.test('discovers workspace packages, including private ones', () => {
     const packages = discoverPackages(WORKSPACE_FIXTURE, rootPkg);
 
-    assert.deepEqual(packages.map(p => p.name), [ '@fix/a', '@fix/c' ]);
+    assert.deepEqual(packages.map(p => p.name), [ '@fix/a', '@fix/b', '@fix/c' ]);
+    assert.equal(packages.find(p => p.name === '@fix/b').pkg.private, true);
   });
 
-  await t.test('skips private packages', () => {
-    const packages = discoverPackages(WORKSPACE_FIXTURE, rootPkg);
+  await t.test('excludes private packages when excludePrivate is set', () => {
+    const packages = discoverPackages(WORKSPACE_FIXTURE, rootPkg, { excludePrivate: true });
 
+    assert.deepEqual(packages.map(p => p.name), [ '@fix/a', '@fix/c' ]);
     assert.ok(!packages.some(p => p.name === '@fix/b'));
   });
 
@@ -232,7 +234,7 @@ test('discoverPackages', async (t) => {
     const warnings = [];
     const logger = { warn: msg => warnings.push(msg) };
 
-    discoverPackages(WORKSPACE_FIXTURE, { workspaces: [ '!packages/a' ] }, logger);
+    discoverPackages(WORKSPACE_FIXTURE, { workspaces: [ '!packages/a' ] }, { logger });
 
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /negated workspace pattern/);

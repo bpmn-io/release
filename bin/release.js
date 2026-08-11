@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 
 import { release, ReleaseError } from '../lib/release.js';
+import { setVersion } from '../lib/version.js';
 import { createInteractivePrompter, createScriptedPrompter } from '../lib/prompt.js';
 
 const HELP = `Usage: bio-release [options]
+       bio-release version <version> [options]
 
 Publish changed packages of an npm monorepo to npm, in dependency order.
 The release strategy is configured (and required) via package.json#releaseConfig.strategy.
+
+Commands:
+  version <spec...>    stamp versions onto every workspace package (including
+                       private ones) and reconcile the lockfile — no commit, no
+                       tag, no prompt, no build, no publish. Accepts an explicit
+                       version, a bump level, or per-package "name=spec".
+                       Run "bio-release version --help" for details.
 
 Options:
   --cwd <dir>          repository root (default: current directory)
@@ -40,6 +49,37 @@ Examples:
   bio-release --bump @scope/a=patch --bump @scope/b=minor --yes
   bio-release --bump preminor --preid alpha --yes
   bio-release --bump prerelease --preid beta --dist-tag beta --yes
+  bio-release version 1.2.0-nightly.0
+  bio-release version @scope/a=1.2.3 @scope/b=minor
+`;
+
+const VERSION_HELP = `Usage: bio-release version <spec...> [options]
+
+Stamp versions onto workspace packages (including private ones) and reconcile the
+lockfile. This is version-only: it makes NO commit, NO git tag, NO prompt, NO
+build and NO publish — unlike a full release. Use it in CI/nightly pipelines that
+need to stamp a computed version before building artifacts.
+
+Arguments:
+  <spec...>            one or more version specs. A bare spec applies to every
+                       package; a "name=spec" targets a specific package (and
+                       wins over the bare default). Packages with no spec are
+                       left untouched. Each spec is either an explicit semver
+                       version (e.g. 1.2.3, 1.2.0-nightly.0) or a bump level
+                       (patch | minor | major | premajor | preminor | prepatch |
+                       prerelease), resolved off the package's current version.
+
+Options:
+  --cwd <dir>          repository root (default: current directory)
+  --preid <id>         pre-release identifier for pre* bump levels (default: alpha)
+  --no-private         leave private packages untouched instead of stamping them
+  -h, --help           show this help
+
+Examples:
+  bio-release version 1.2.0-nightly.0
+  bio-release version 1.2.3 --cwd ./repo
+  bio-release version 1.2.3 --no-private
+  bio-release version @scope/a=1.2.3 @scope/b=minor
 `;
 
 function parseArgs(argv) {
@@ -83,8 +123,70 @@ function parseArgs(argv) {
   return opts;
 }
 
+function parseVersionArgs(argv) {
+  const opts = { excludePrivate: false, overrides: {} };
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg === '-h' || arg === '--help') {
+      opts.help = true;
+    } else if (arg === '--cwd') {
+      opts.cwd = argv[++i];
+    } else if (arg === '--preid') {
+      opts.preid = argv[++i];
+    } else if (arg === '--no-private') {
+      opts.excludePrivate = true;
+    } else if (arg.startsWith('-')) {
+      console.error(`Unknown argument: ${arg}\n`);
+      console.error(VERSION_HELP);
+      process.exit(1);
+    } else if (arg.includes('=')) {
+      const idx = arg.lastIndexOf('=');
+      opts.overrides[arg.slice(0, idx)] = arg.slice(idx + 1);
+    } else if (opts.defaultSpec === undefined) {
+      opts.defaultSpec = arg;
+    } else {
+      console.error(`Unexpected argument: ${arg} (only one bare version may be given)\n`);
+      console.error(VERSION_HELP);
+      process.exit(1);
+    }
+  }
+
+  return opts;
+}
+
+async function versionMain(argv) {
+  const opts = parseVersionArgs(argv);
+
+  if (opts.help) {
+    console.log(VERSION_HELP);
+    return;
+  }
+
+  if (opts.defaultSpec === undefined && Object.keys(opts.overrides).length === 0) {
+    console.error('Missing required version. Pass a version, a bump level, or per-package assignments.\n');
+    console.error(VERSION_HELP);
+    process.exit(1);
+  }
+
+  await setVersion(opts.defaultSpec, {
+    cwd: opts.cwd,
+    excludePrivate: opts.excludePrivate,
+    overrides: opts.overrides,
+    preid: opts.preid
+  });
+}
+
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+
+  if (argv[0] === 'version') {
+    await versionMain(argv.slice(1));
+    return;
+  }
+
+  const opts = parseArgs(argv);
 
   if (opts.help) {
     console.log(HELP);

@@ -174,6 +174,49 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('independent — warns when a stable package pins a pre-release dependency', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' },
+      'packages/c': { name: '@fix/c', version: '1.0.0', dependencies: { '@fix/a': '^1.0.0' } }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ], '@fix/c': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0', '@fix/c@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: next' ], 'packages/c': [ 'fix: c' ] }
+    });
+
+    const warnings = [];
+    const logger = { log() {}, warn: (msg) => warnings.push(msg), error() {} };
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        distTag: 'next',
+        logger,
+
+        // @fix/a goes pre-release while its stable dependent @fix/c pins it
+        prompter: createScriptedPrompter({ bumps: { '@fix/a': 'preminor', '@fix/c': 'patch' }, preid: 'alpha', yes: true })
+      });
+
+      assert.deepEqual(result.released, [
+        { name: '@fix/a', version: '1.1.0-alpha.0' },
+        { name: '@fix/c', version: '1.0.1' }
+      ]);
+
+      // @fix/c (stable 1.0.1) now pins the pre-release @fix/a@1.1.0-alpha.0 on disk
+      assert.equal(readJSON(join(cwd, 'packages/c', 'package.json')).dependencies['@fix/a'], '^1.1.0-alpha.0');
+      assert.ok(
+        warnings.some(w => w.includes('@fix/c@1.0.1 (stable) pins pre-release @fix/a@1.1.0-alpha.0')),
+        `expected a stable-pins-pre-release warning, got: ${JSON.stringify(warnings)}`
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('independent — publishes a pre-release under its explicit dist-tag', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },

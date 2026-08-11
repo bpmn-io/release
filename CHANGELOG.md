@@ -9,6 +9,7 @@ ___Note:__ Yet to be released changes appear here._
 * `FEAT`: version + tag private packages by default (never publishing them); add `--no-private` to exclude them from the release entirely ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: add `--force-release` to release every eligible package even without changes ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: make the per-package `all` build step optional — skip (with a warning) when the script is absent, or skip entirely via `--no-build` ([#9](https://github.com/bpmn-io/release/pull/9))
+* `FEAT`: add a `version` command / `setVersion` API to stamp versions ([#10](https://github.com/bpmn-io/release/pull/10))
 
 ### Breaking Changes
 

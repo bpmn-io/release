@@ -87,6 +87,10 @@ test('setVersion', async (t) => {
       ]);
       assert.deepEqual(commands(run, 'npm install'), [ 'npm install --package-lock-only' ]);
 
+      // the lockfile refresh runs at the repo root, not a package dir
+      const install = run.calls.find(c => c.cmd === 'npm install --package-lock-only');
+      assert.equal(install.opts.cwd, cwd);
+
       // no git, no publish, no whoami
       assert.deepEqual(commands(run, 'git'), []);
       assert.deepEqual(commands(run, 'npm publish'), []);

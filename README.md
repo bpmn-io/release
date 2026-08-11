@@ -71,6 +71,9 @@ npx @bpmn-io/release
 npx @bpmn-io/release --bump minor --yes
 npx @bpmn-io/release --bump @scope/a=patch --bump @scope/b=minor --yes
 
+# --bump also takes an explicit version (same grammar as `version`)
+npx @bpmn-io/release --bump @scope/a=1.2.3 --bump @scope/b=minor --yes
+
 # non-interactive: cut 1.3.0-alpha.0 under dist-tag "next"
 npx @bpmn-io/release --bump preminor --preid alpha --dist-tag next --yes
 
@@ -109,7 +112,9 @@ A spec is either an **explicit** semver version (e.g. `1.2.3`,
 `major`, `premajor`, `preminor`, `prepatch`, `prerelease` — resolved off the
 package's current version). A bare spec applies to every package; a `name=spec`
 targets a specific one (and wins over the bare default). Packages left without a
-spec are untouched.
+spec are untouched. This is the same per-package grammar as `release`'s `--bump`,
+so the two commands are symmetric: `version` stamps, `release` also commits, tags
+and publishes.
 
 ```bash
 # stamp 1.2.0-nightly.0 onto every workspace package, refresh the lockfile

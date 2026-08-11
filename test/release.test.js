@@ -145,6 +145,34 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('independent — a per-package explicit version is stamped verbatim', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0', scripts: { all: 'exit 0' } }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: add thing' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bumps: { '@fix/a': '1.2.3' }, yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '1.2.3' } ]);
+      assert.deepEqual(result.tags, [ '@fix/a@1.2.3' ]);
+      assert.deepEqual(commands(run, 'npm version'), [ 'npm version 1.2.3 --no-git-tag-version' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('independent — leaves a package out when its bump is skipped', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },

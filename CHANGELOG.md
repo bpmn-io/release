@@ -10,6 +10,7 @@ ___Note:__ Yet to be released changes appear here._
 * `FEAT`: add `--force-release` to release every eligible package even without changes ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: make the per-package `all` build step optional — skip (with a warning) when the script is absent, or skip entirely via `--no-build` ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: add a `version` command / `setVersion` API to stamp versions ([#10](https://github.com/bpmn-io/release/pull/10))
+* `FEAT`: accept explicit versions in `release --bump` (mirroring the `version` command) ([#10](https://github.com/bpmn-io/release/pull/10))
 
 ### Breaking Changes
 

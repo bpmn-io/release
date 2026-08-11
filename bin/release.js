@@ -19,12 +19,13 @@ Commands:
 
 Options:
   --cwd <dir>          repository root (default: current directory)
-  --bump <spec>        non-interactive bump; repeatable. Either a bare level
+  --bump <spec>        non-interactive bump; repeatable. Either a bare spec
                        applied to every package ("--bump minor") or a
-                       per-package "name=level" (e.g. "--bump @scope/pkg=patch").
-                       For "fixed", a single bare level sets the shared bump.
-                       Levels: patch | minor | major |
-                               premajor | preminor | prepatch | prerelease | skip.
+                       per-package "name=spec" (e.g. "--bump @scope/pkg=patch").
+                       For "fixed", a single bare spec sets the shared bump.
+                       A spec is a level (patch | minor | major | premajor |
+                       preminor | prepatch | prerelease | skip) or an explicit
+                       version (e.g. "--bump 1.2.3").
   --preid <id>         pre-release identifier for pre* bumps (default: alpha),
                        e.g. "alpha", "beta", "rc", "next".
   --dist-tag <tag>     npm dist-tag to publish under. Defaults to "latest" for
@@ -49,6 +50,7 @@ Examples:
   bio-release --bump @scope/a=patch --bump @scope/b=minor --yes
   bio-release --bump preminor --preid alpha --yes
   bio-release --bump prerelease --preid beta --dist-tag beta --yes
+  bio-release --bump @scope/a=1.2.3 --bump @scope/b=minor --yes
   bio-release version 1.2.0-nightly.0
   bio-release version @scope/a=1.2.3 @scope/b=minor
 `;

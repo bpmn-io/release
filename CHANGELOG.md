@@ -6,11 +6,15 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+## 0.5.0
+
 * `FEAT`: version + tag private packages by default (never publishing them); add `--no-private` to exclude them from the release entirely ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: add `--force-release` to release every eligible package even without changes ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: make the per-package `all` build step optional — skip (with a warning) when the script is absent, or skip entirely via `--no-build` ([#9](https://github.com/bpmn-io/release/pull/9))
 * `FEAT`: add a `version` command / `setVersion` API to stamp versions ([#10](https://github.com/bpmn-io/release/pull/10))
 * `FEAT`: accept explicit versions in `release --bump` (mirroring the `version` command) ([#10](https://github.com/bpmn-io/release/pull/10))
+* `FEAT`: keep `version`/`setVersion` side-effect-free, never touching `node_modules` ([#12](https://github.com/bpmn-io/release/pull/12))
+* `FIX`: scope the pre-flight and lockfile-refresh commands to the explicit `cwd` instead of the process default ([#12](https://github.com/bpmn-io/release/pull/12))
 
 ### Breaking Changes
 

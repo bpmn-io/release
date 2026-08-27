@@ -6,6 +6,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FIX`: don't prompt for pre-release identifier when provided via `--preid` ([#13](https://github.com/bpmn-io/release/pull/13))
+
 ## 0.5.0
 
 * `FEAT`: version + tag private packages by default (never publishing them); add `--no-private` to exclude them from the release entirely ([#9](https://github.com/bpmn-io/release/pull/9))

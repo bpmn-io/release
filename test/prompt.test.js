@@ -60,8 +60,10 @@ test('createInteractivePrompter', async (t) => {
     prompter.close();
   });
 
-  await t.test('defaults the dist-tag to the configured one', async () => {
-    const prompter = interactive([ 'preminor', 'beta', '' ], { defaultDistTag: 'next' });
+  await t.test('does not ask for the dist-tag when it is governed', async () => {
+
+    // only bump + identifier are answered — a governed dist-tag must not prompt
+    const prompter = interactive([ 'preminor', 'beta' ], { distTag: 'next' });
 
     assert.deepEqual(
       await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),

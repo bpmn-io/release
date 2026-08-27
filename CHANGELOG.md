@@ -7,6 +7,7 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 ___Note:__ Yet to be released changes appear here._
 
 * `FIX`: don't prompt for pre-release identifier when provided via `--preid` ([#13](https://github.com/bpmn-io/release/pull/13))
+* `FIX`: don't prompt for `dist-tag` when nothing is published ([#13](https://github.com/bpmn-io/release/pull/13))
 
 ## 0.5.0
 

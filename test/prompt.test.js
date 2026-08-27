@@ -82,6 +82,19 @@ test('createInteractivePrompter', async (t) => {
     prompter.close();
   });
 
+  await t.test('does not ask for the identifier when preid is governed', async () => {
+
+    // only the bump is answered — a governed preid must not prompt for one
+    const prompter = interactive([ 'preminor', 'next' ], { preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: 'preminor', preid: 'rc', distTag: 'next' }
+    );
+
+    prompter.close();
+  });
+
   await t.test('returns "skip" verbatim', async () => {
     const prompter = interactive([ 'skip' ]);
 

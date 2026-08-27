@@ -95,6 +95,33 @@ test('createInteractivePrompter', async (t) => {
     prompter.close();
   });
 
+  await t.test('does not ask for a dist-tag when nothing is published', async () => {
+
+    // only the bump is answered — a no-publish (all-private) release skips the
+    // dist-tag prompt entirely
+    const prompter = interactive([ 'preminor', '' ]);
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3', publish: false }),
+      { type: 'preminor', preid: 'alpha', distTag: undefined }
+    );
+
+    prompter.close();
+  });
+
+  await t.test('skips both prompts when preid is governed and nothing is published', async () => {
+
+    // only the bump is answered — neither the identifier nor the dist-tag are asked
+    const prompter = interactive([ 'preminor' ], { preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3', publish: false }),
+      { type: 'preminor', preid: 'rc', distTag: undefined }
+    );
+
+    prompter.close();
+  });
+
   await t.test('returns "skip" verbatim', async () => {
     const prompter = interactive([ 'skip' ]);
 

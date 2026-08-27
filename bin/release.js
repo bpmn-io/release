@@ -196,7 +196,7 @@ async function main() {
   }
 
   const prompter = opts.interactive
-    ? createInteractivePrompter({ preid: opts.preid, defaultDistTag: opts.distTag })
+    ? createInteractivePrompter({ preid: opts.preid, distTag: opts.distTag })
     : createScriptedPrompter({ bumps: opts.bumps, bump: opts.defaultBump, preid: opts.preid, yes: opts.yes });
 
   await release({

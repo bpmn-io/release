@@ -1,6 +1,6 @@
 {
   "name": "@bpmn-io/release",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Publish changed packages of an npm monorepo - bpmn.io style.",
   "type": "module",
   "license": "MIT",

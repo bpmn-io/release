@@ -806,6 +806,27 @@ test('release (end-to-end)', async (t) => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  await t.test('pre-flight — rejects a global \'latest\' dist-tag up front', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner();
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, distTag: 'latest', logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
+        (err) => err instanceof ReleaseError && /Refusing the global 'latest' dist-tag/.test(err.message)
+      );
+
+      // rejected before any git/npm work
+      assert.equal(run.calls.length, 0);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });
 
 

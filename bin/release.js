@@ -40,6 +40,9 @@ Options:
   --no-build           skip the build step ("npm run all") for all packages.
                        A package without an "all" script is skipped anyway,
                        with a warning.
+  --no-release-draft   do not open a pre-filled GitHub release draft in the
+                       browser after publishing. By default one draft per
+                       release tag is opened when origin is on GitHub.
   -y, --yes            skip the confirmation prompt (required for a
                        non-interactive run to actually publish)
   -h, --help           show this help
@@ -85,7 +88,7 @@ Examples:
 `;
 
 function parseArgs(argv) {
-  const opts = { bumps: {}, yes: false, interactive: true, build: true };
+  const opts = { bumps: {}, yes: false, interactive: true, build: true, releaseDraft: true };
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -106,6 +109,8 @@ function parseArgs(argv) {
       opts.forceRelease = true;
     } else if (arg === '--no-build') {
       opts.build = false;
+    } else if (arg === '--no-release-draft') {
+      opts.releaseDraft = false;
     } else if (arg === '--bump') {
       const value = argv[++i];
       opts.interactive = false;
@@ -205,6 +210,7 @@ async function main() {
     excludePrivate: opts.excludePrivate,
     forceRelease: opts.forceRelease,
     build: opts.build,
+    releaseDraft: opts.releaseDraft,
     prompter
   });
 }

@@ -44,10 +44,11 @@ function createWorkspace(pkgs) {
  *   changes?: Record<string, string[]>,
  *   whoami?: string|null,
  *   clean?: boolean,
- *   staleAfterInstall?: boolean
+ *   staleAfterInstall?: boolean,
+ *   remote?: string|null
  * }} [world]
  */
-function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true, staleAfterInstall = false } = {}) {
+function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true, staleAfterInstall = false, remote = null } = {}) {
   const calls = [];
   let installed = false;
 
@@ -79,6 +80,12 @@ function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-
       const versions = npmVersions[args[1]];
       if (!versions) throw new Error(`404 ${args[1]}`);
       return JSON.stringify(versions);
+    }
+
+    // release draft: origin remote URL (absent remote → treated as not GitHub)
+    if (file === 'git' && args[0] === 'remote') {
+      if (!remote) throw new Error("No such remote 'origin'");
+      return remote;
     }
 
     // detect: does a release tag exist?
@@ -865,6 +872,223 @@ test('release (end-to-end)', async (t) => {
 
       // rejected before any git/npm work
       assert.equal(run.calls.length, 0);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  // a browser opener recording the URLs it is asked to open
+  const createOpen = () => {
+    const opened = [];
+    const open = (url) => { opened.push(url); };
+    open.opened = opened;
+    return open;
+  };
+
+  await t.test('release draft — opens a GitHub draft per published tag when attached to GitHub', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' },
+      'packages/c': { name: '@fix/c', version: '1.0.0', dependencies: { '@fix/a': '^1.0.0' } }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ], '@fix/c': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0', '@fix/c@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: add thing' ], 'packages/c': [] },
+      remote: 'git@github.com:bpmn-io/internal.git'
+    });
+
+    try {
+      const open = createOpen();
+      const result = await release({
+        cwd,
+        run,
+        open,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.equal(result.released.length, 2);
+
+      const urls = open.opened.map(u => new URL(u));
+      assert.deepEqual(urls.map(u => u.searchParams.get('tag')), [ '@fix/a@1.1.0', '@fix/c@1.1.0' ]);
+      for (const url of urls) {
+        assert.equal(url.origin + url.pathname, 'https://github.com/bpmn-io/internal/releases/new');
+        assert.equal(url.searchParams.get('prerelease'), null);
+      }
+
+      // the first package's draft carries np-compatible release notes
+      assert.equal(
+        urls[0].searchParams.get('body'),
+        '- feat: add thing\n\n---\n\n' +
+        'https://github.com/bpmn-io/internal/compare/@fix/a@1.0.0...@fix/a@1.1.0'
+      );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('release draft — fixed strategy drafts the shared tag once, pre-releases marked', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@fix/a', version: '1.3.0-alpha.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.3.0-alpha.0' ] },
+      tags: [ 'v1.2.0', 'v1.3.0-alpha.0' ],
+      changes: { 'packages/a': [ 'feat: add thing' ], '.': [ 'abc1234 feat: add thing' ] },
+      remote: 'https://github.com/bpmn-io/internal.git'
+    });
+
+    try {
+      const open = createOpen();
+      const result = await release({
+        cwd,
+        run,
+        distTag: 'alpha',
+        open,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'prerelease', preid: 'alpha', yes: true })
+      });
+
+      assert.deepEqual(result.tags, [ 'v1.3.0-alpha.1' ]);
+
+      const urls = open.opened.map(u => new URL(u));
+      assert.equal(urls.length, 1);
+      assert.equal(urls[0].searchParams.get('tag'), 'v1.3.0-alpha.1');
+      assert.equal(urls[0].searchParams.get('prerelease'), '1');
+
+      // the commit hash is extracted into the np-style notes line
+      assert.match(urls[0].searchParams.get('body'), /^- feat: add thing {2}abc1234/);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('release draft — first release (no previous tag) drafts the whole history, without a compare footer', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '0.0.0' }
+    });
+
+    // no tags, not yet published: git log 'HEAD' returns the full history
+    const run = createRunner({
+      changes: { 'packages/a': [ 'abc1234 feat: initial' ] },
+      remote: 'git@github.com:bpmn-io/internal.git'
+    });
+
+    try {
+      const open = createOpen();
+      const result = await release({
+        cwd,
+        run,
+        open,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.equal(result.released.length, 1);
+
+      // history was queried without a range, up to the pre-release commit
+      // (dir normalized: `\` on Windows)
+      assert.deepEqual(
+        commands(run, 'git log HEAD^').map(c => c.replaceAll(sep, '/')),
+        [ 'git log HEAD^ --pretty=format:%h %s -- packages/a' ]
+      );
+
+      const body = new URL(open.opened[0]).searchParams.get('body');
+      assert.equal(body, '- feat: initial  abc1234');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('release draft — skipped when the repository is not attached to GitHub', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: add thing' ] },
+      remote: 'git@gitlab.com:bpmn-io/internal.git'
+    });
+
+    try {
+      const open = createOpen();
+      const result = await release({
+        cwd,
+        run,
+        open,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.equal(result.released.length, 1);
+      assert.deepEqual(open.opened, []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('release draft — skipped when disabled', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: add thing' ] },
+      remote: 'git@github.com:bpmn-io/internal.git'
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        releaseDraft: false,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.equal(result.released.length, 1);
+      assert.deepEqual(commands(run, 'git remote'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('release draft — private packages get no draft (tagged but never published)', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/app': { name: '@fix/app', version: '1.0.0', private: true }
+    });
+
+    const run = createRunner({
+      tags: [ '@fix/app@1.0.0' ],
+      changes: { 'packages/app': [ 'feat: add thing' ] },
+      remote: 'git@github.com:bpmn-io/internal.git'
+    });
+
+    try {
+      const open = createOpen();
+      const result = await release({
+        cwd,
+        run,
+        open,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'minor', yes: true })
+      });
+
+      assert.equal(result.released.length, 1);
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(open.opened, []);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

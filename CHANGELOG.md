@@ -6,6 +6,11 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+## 0.6.0
+
+* `FEAT`: open GitHub releases after publishing ([#15](https://github.com/bpmn-io/release/pull/15))
+* `FIX`: release `stdin` before cutting releases ([#14](https://github.com/bpmn-io/release/pull/14))
+
 ## 0.5.1
 
 * `FIX`: don't prompt for pre-release identifier when provided via `--preid` ([#13](https://github.com/bpmn-io/release/pull/13))

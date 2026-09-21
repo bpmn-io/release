@@ -730,6 +730,48 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('closes the prompter before executing the release', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'fix: a' ] }
+    });
+
+    let confirmedAt = Infinity;
+    let closedAt = Infinity;
+    const scripted = createScriptedPrompter({ bump: 'patch', yes: true });
+    const prompter = {
+      ...scripted,
+      async confirm(...args) {
+        confirmedAt = run.calls.length;
+        return scripted.confirm(...args);
+      },
+      close() {
+        closedAt = run.calls.length;
+        scripted.close();
+      }
+    };
+
+    try {
+      await release({ cwd, run, logger: SILENT_LOGGER, prompter });
+
+      const inheritedStdio = run.calls
+        .map((c, i) => c.opts.stdio === 'inherit' ? i : -1)
+        .filter(i => i >= confirmedAt);
+      assert.ok(inheritedStdio.length > 0, 'an inherited-stdio command ran after confirmation');
+      for (const i of inheritedStdio) {
+        assert.ok(closedAt <= i, `prompter closed before \`${run.calls[i].cmd}\``);
+      }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('reports nothing to publish when no package changed', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },

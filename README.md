@@ -161,6 +161,18 @@ gate. This step is optional:
 - if a package has no `all` script it is skipped, with a warning;
 - pass `--no-build` to skip the build for every package regardless.
 
+## GitHub release drafts
+
+After the release commit and tags are pushed, a pre-filled GitHub release draft
+opens in your browser for every release tag (mirroring
+[`np`](https://github.com/sindresorhus/np)): one per `name@version` tag under
+`independent`, one for the shared `vX.Y.Z` tag under `fixed`. The draft body
+lists the shipped commit subjects; pre-releases are marked as such. Private
+packages are never published, so they get no draft.
+
+Skipped when `origin` is not on GitHub; if no browser can be opened, the draft
+URL is printed instead. Pass `--no-release-draft` to turn it off.
+
 ## Pre-releases
 
 You can safely cut an `alpha` / `rc` release either through interactive
@@ -191,6 +203,7 @@ const result = await release({
   cwd: process.cwd(),          // repository root
   logger: console,             // any { log, warn, error }
   distTag: 'next',             // required for pre-releases; never `latest`
+  releaseDraft: false,         // do not open GitHub release drafts (default: true)
   prompter: createScriptedPrompter({ bump: 'preminor', preid: 'alpha', yes: true })
 });
 

@@ -32,7 +32,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "nano-spawn": "^2.1.0"
+    "nano-spawn": "^2.1.0",
+    "opener": "^1.5.2"
   },
   "devDependencies": {
     "eslint": "^9.39.4",

@@ -202,6 +202,10 @@ Before releasing, `origin` is asked for the tip of the branch the release pushes
 to; the release fails on a detached HEAD or if that tip is not contained in your
 checkout (i.e. the push would not fast-forward).
 
+A backport — a stable version below the highest stable on npm — needs an
+explicit, non-`latest` dist-tag: you are asked for one (suggesting
+`backports`), or pass `--dist-tag <tag>`.
+
 ## Programmatic API
 
 ```js
@@ -210,7 +214,7 @@ import { release, createScriptedPrompter } from '@bpmn-io/release';
 const result = await release({
   cwd: process.cwd(),          // repository root
   logger: console,             // any { log, warn, error }
-  distTag: 'next',             // required for pre-releases; never `latest`
+  distTag: 'next',             // required for pre-releases and backports; never `latest`
   releaseDraft: false,         // do not open GitHub release drafts (default: true)
   prompter: createScriptedPrompter({ bump: 'preminor', preid: 'alpha', yes: true })
 });
@@ -225,7 +229,7 @@ A **prompter** drives interactive decisions:
 
 ```js
 {
-  bump({ name, currentVersion }): { type, preid, distTag } | 'skip',
+  bump({ name, currentVersion, publish, latestStable }): { type, preid, distTag } | 'skip',
   confirm({ plan, strategy }): boolean,
   close(): void
 }
@@ -233,8 +237,10 @@ A **prompter** drives interactive decisions:
 
 `type` is one of `patch | minor | major | premajor | preminor | prepatch |
 prerelease`, `preid` (e.g. `alpha`) is the pre-release identifier used by the
-`pre*` types, and `distTag` is the npm dist-tag chosen for a pre-release (never
-`latest`; omit it for a stable bump to default to `latest`).
+`pre*` types, and `distTag` is the npm dist-tag for a pre-release or a backport — a stable
+version below `latestStable`, the highest stable version on npm. It is required
+for both and must not be `latest`; omit it only for a regular stable bump, which
+defaults to `latest`.
 
 `createInteractivePrompter({ defaultPreid, defaultDistTag })` (readline, the
 default) and `createScriptedPrompter({ bumps, bump, preid, yes })` (head-less)

@@ -29,8 +29,9 @@ Options:
   --preid <id>         pre-release identifier for pre* bumps (default: alpha),
                        e.g. "alpha", "beta", "rc", "next".
   --dist-tag <tag>     npm dist-tag to publish under. Defaults to "latest" for
-                       stable versions. A pre-release has no default: it requires
-                       an explicit, non-"latest" dist-tag (e.g. --dist-tag next).
+                       stable versions. Pre-releases and backports require an
+                       explicit, non-"latest" dist-tag (e.g. --dist-tag next,
+                       --dist-tag backports).
   --no-private         exclude private packages from the release entirely. By
                        default they are versioned, committed and tagged like any
                        other package, but never published to the registry.

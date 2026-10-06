@@ -11,6 +11,7 @@ ___Note:__ Yet to be released changes appear here._
 ## 0.6.1
 
 * `FIX`: baseline releases off `package.json`, not the highest published version ([#16](https://github.com/bpmn-io/release/pull/16))
+* `FEAT`: require an explicit dist-tag for backport releases ([#18](https://github.com/bpmn-io/release/pull/18))
 
 ## 0.6.0
 

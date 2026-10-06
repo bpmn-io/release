@@ -38,6 +38,57 @@ test('createInteractivePrompter', async (t) => {
     prompter.close();
   });
 
+  await t.test('asks for a dist-tag on a backport bump, suggesting backports', async () => {
+
+    // npm's latest stable is 9.2.0; bumping 8.5.3 (patch → 8.5.4) is a
+    // backport and must publish under an explicit, non-'latest' tag
+    const prompter = interactive([ 'patch', '' ]);
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '8.5.3', latestStable: '9.2.0' }),
+      { type: 'patch', preid: 'alpha', distTag: 'backports' }
+    );
+
+    prompter.close();
+  });
+
+  await t.test('asks for a dist-tag on a backport to an older minor line', async () => {
+
+    // npm's latest stable is 8.11.0; patching the 8.10 line is a backport, too
+    const prompter = interactive([ 'patch', '8.10.x' ]);
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '8.10.1', latestStable: '8.11.0' }),
+      { type: 'patch', preid: 'alpha', distTag: '8.10.x' }
+    );
+
+    prompter.close();
+  });
+
+  await t.test('does not ask for a dist-tag when the bump is the new latest stable', async () => {
+
+    // 8.10.1 → 8.11.0 when npm's latest stable is 8.10.1: the new latest
+    const prompter = interactive([ 'minor' ]);
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '8.10.1', latestStable: '8.10.1' }),
+      { type: 'minor', preid: 'alpha', distTag: undefined }
+    );
+
+    prompter.close();
+  });
+
+  await t.test('re-asks until the backport dist-tag is not latest', async () => {
+    const prompter = interactive([ 'patch', 'latest', '8.x' ]);
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '8.5.3', latestStable: '9.2.0' }),
+      { type: 'patch', preid: 'alpha', distTag: '8.x' }
+    );
+
+    prompter.close();
+  });
+
   await t.test('asks for identifier and dist-tag on a pre-release bump', async () => {
     const prompter = interactive([ 'preminor', 'beta', 'next' ]);
 

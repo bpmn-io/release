@@ -84,7 +84,8 @@ function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-
     // detect: highest published version (missing package → 404 → treated as unpublished)
     if (file === 'npm' && args[0] === 'view') {
       const versions = npmVersions[args[1]];
-      if (!versions) throw new Error(`404 ${args[1]}`);
+      if (versions instanceof Error) throw versions;
+      if (!versions) throw Object.assign(new Error(`Command failed: npm view ${args[1]}`), { stderr: 'npm error code E404' });
       return JSON.stringify(versions);
     }
 
@@ -418,6 +419,83 @@ test('release (end-to-end)', async (t) => {
 
       // the shared version is substituted into the release commit message
       assert.deepEqual(commands(run, 'git commit'), [ 'git commit -m chore(packages): release v1.1.0' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — backport detection ignores unselected packages', async () => {
+
+    // b is left behind; its unrelated, higher npm history must not turn the
+    // shared bump of a into a backport
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '8.5.3' },
+      'packages/b': { name: '@app/b', version: '8.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@app/a': [ '8.5.3' ], '@app/b': [ '8.5.3', '9.2.0' ] },
+      tags: [ 'v8.5.3' ],
+      changes: { 'packages/a': [ 'fix: a' ] }
+    });
+
+    const asked = [];
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: {
+          bump: async (ctx) => { asked.push(ctx.latestStable); return { type: 'patch' }; },
+          confirm: async () => true,
+          close() {}
+        }
+      });
+
+      assert.deepEqual(asked, [ '8.5.3' ]);
+      assert.deepEqual(result.released, [ { name: '@app/a', version: '8.5.4' } ]);
+      assert.deepEqual(commands(run, 'npm publish'), [ 'npm publish' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — refuses to default a backport release to the latest dist-tag', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@app/a', version: '8.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@app/a': [ '8.5.3', '9.2.0' ] },
+      tags: [ 'v8.5.3' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter({ bump: 'patch', yes: true }) }),
+        (err) => err instanceof ReleaseError && /publishing 8\.5\.4 while npm holds the higher stable 9\.2\.0/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(commands(run, 'git commit'), []);
+
+      const result = await release({
+        cwd,
+        run: createRunner({
+          npmVersions: { '@app/a': [ '8.5.3', '9.2.0' ] },
+          tags: [ 'v8.5.3' ],
+          changes: { 'packages/a': [ 'fix: backport' ] }
+        }),
+        distTag: 'backports',
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@app/a', version: '8.5.4' } ]);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -947,6 +1025,124 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('plan — publishes a backport to an older major under the given dist-tag', async () => {
+
+    // On the 8.x backport branch: main already released 9.2.0, but a patch
+    // of the 8.5 line must still proceed — under an explicit dist-tag,
+    // never `latest`.
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '8.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '8.5.3', '9.2.0' ] },
+      tags: [ '@fix/a@8.5.3', '@fix/a@9.2.0' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        distTag: '8.x',
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '8.5.4' } ]);
+      assert.deepEqual(result.tags, [ '@fix/a@8.5.4' ]);
+      assert.deepEqual(commands(run, 'npm publish'), [ 'npm publish --tag 8.x' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('plan — publishes a backport to an older minor under the given dist-tag', async () => {
+
+    // On the 8.10.x maintenance branch while 8.11.0 is the latest release:
+    // patching 8.10 is a backport and publishes under the given dist-tag.
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '8.10.1' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '8.10.1', '8.11.0' ] },
+      tags: [ '@fix/a@8.10.1', '@fix/a@8.11.0' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        distTag: 'backports',
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '8.10.2' } ]);
+      assert.deepEqual(commands(run, 'npm publish'), [ 'npm publish --tag backports' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('plan — refuses to default a 0.x maintenance release to the latest dist-tag', async () => {
+
+    // 0.5.3 while npm's latest is 0.6.0: a backport, even within major 0
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '0.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '0.5.3', '0.6.0' ] },
+      tags: [ '@fix/a@0.5.3', '@fix/a@0.6.0' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter({ bump: 'patch', yes: true }) }),
+        (err) => err instanceof ReleaseError && /publishing 0\.5\.4 while npm holds the higher stable 0\.6\.0/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('plan — refuses to default a backport release to the latest dist-tag', async () => {
+
+    // Publishing 8.5.4 to `latest` would steal the tag from the current 9.x
+    // line; without an explicit maintenance dist-tag the release is rejected.
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '8.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '8.5.3', '9.2.0' ] },
+      tags: [ '@fix/a@8.5.3', '@fix/a@9.2.0' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter({ bump: 'patch', yes: true }) }),
+        (err) => err instanceof ReleaseError && /publishing 8\.5\.4 while npm holds the higher stable 9\.2\.0/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(commands(run, 'git commit'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('pre-flight — rejects a detached HEAD', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
@@ -1014,6 +1210,60 @@ test('release (end-to-end)', async (t) => {
       // asked the remote, but nothing to be behind of yet
       assert.deepEqual(commands(run, 'git ls-remote'), [ 'git ls-remote origin refs/heads/feature' ]);
       assert.deepEqual(commands(run, 'git merge-base'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('plan — refuses a backport to the latest dist-tag chosen by a custom prompter', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '8.5.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '8.5.3', '9.2.0' ] },
+      tags: [ '@fix/a@8.5.3', '@fix/a@9.2.0' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      await assert.rejects(
+        release({
+          cwd,
+          run,
+          logger: SILENT_LOGGER,
+          prompter: { bump: async () => ({ type: 'patch', distTag: 'latest' }), confirm: async () => true, close() {} }
+        }),
+        (err) => err instanceof ReleaseError && /non-latest dist-tag/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('detect — rejects when the npm registry cannot be queried', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '8.5.3' }
+    });
+
+    // not a 404: the package must not be mistaken for never published
+    const run = createRunner({
+      npmVersions: { '@fix/a': new Error('npm error code ETIMEDOUT') },
+      tags: [ '@fix/a@8.5.3' ],
+      changes: { 'packages/a': [ 'fix: backport' ] }
+    });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter({ bump: 'patch', yes: true }) }),
+        (err) => err instanceof ReleaseError && /Could not query npm for @fix\/a: .*ETIMEDOUT/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

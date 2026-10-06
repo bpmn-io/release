@@ -194,6 +194,10 @@ publish) may not touch any code since the last release tag, a package sitting on
 a pre-release version is always offered for release — the usual "nothing changed,
 skip it" gate does not apply while a pre-release is in progress.
 
+Change detection and bump proposals start from the `package.json` version, not
+the highest version on npm — a pre-release cut from a feature branch does not
+affect releases from other branches.
+
 ## Programmatic API
 
 ```js

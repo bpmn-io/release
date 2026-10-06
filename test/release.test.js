@@ -294,6 +294,46 @@ test('release (end-to-end)', async (t) => {
     }
   });
 
+  await t.test('independent — baselines a stable patch off package.json, not a stray pre-release', async () => {
+
+    // An alpha was cut from a feature branch (published and tagged), but we're
+    // back on the stable branch whose package.json still holds 1.2.3. A patch
+    // must diff against and bump from 1.2.3, not the stray 1.3.0-alpha.0.
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.2.3' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.2.3', '1.3.0-alpha.0' ] },
+      tags: [ '@fix/a@1.2.3', '@fix/a@1.3.0-alpha.0' ],
+      changes: { 'packages/a': [ 'fix: patch on stable' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '1.2.4' } ]);
+      assert.deepEqual(result.tags, [ '@fix/a@1.2.4' ]);
+
+      // change detection diffed against the stable tag, not the alpha
+      // (dir normalized: `\` on Windows)
+      assert.deepEqual(commands(run, 'git log @fix/a@1.2.3..HEAD').map(c => c.replaceAll(sep, '/')), [
+        'git log @fix/a@1.2.3..HEAD -- packages/a',
+        'git log @fix/a@1.2.3..HEAD --pretty=format:%s -- packages/a',
+        'git log @fix/a@1.2.3..HEAD^ --pretty=format:%h %s -- packages/a'
+      ]);
+      assert.deepEqual(commands(run, 'git log @fix/a@1.3.0-alpha.0..HEAD'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   await t.test('independent — refuses a pre-release without a dist-tag before publishing', async () => {
     const cwd = createWorkspace({
       '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
@@ -677,6 +717,46 @@ test('release (end-to-end)', async (t) => {
 
       const b = readJSON(join(cwd, 'packages/b', 'package.json'));
       assert.equal(b.version, '1.1.0');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('fixed — baselines a stable patch off package.json, not a stray pre-release', async () => {
+
+    // An alpha was cut from a feature branch (published and tagged), but we're
+    // back on the stable branch whose package.json still holds 1.2.0. The
+    // shared version must come from package.json (1.2.0), so a patch diffs
+    // against v1.2.0 and proposes 1.2.1 — not v1.3.0-alpha.0 / 1.3.0.
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'fixed' } },
+      'packages/a': { name: '@fix/a', version: '1.2.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.2.0', '1.3.0-alpha.0' ] },
+      tags: [ 'v1.2.0', 'v1.3.0-alpha.0' ],
+      changes: { 'packages/a': [ 'fix: patch on stable' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '1.2.1' } ]);
+      assert.deepEqual(result.tags, [ 'v1.2.1' ]);
+
+      // change detection diffed against the stable tag, not the alpha
+      // (dir normalized: `\` on Windows)
+      assert.deepEqual(commands(run, 'git log v1.2.0..HEAD').map(c => c.replaceAll(sep, '/')), [
+        'git log v1.2.0..HEAD --pretty=format:%s -- packages/a',
+        'git log v1.2.0..HEAD^ --pretty=format:%h %s -- .'
+      ]);
+      assert.deepEqual(commands(run, 'git log v1.3.0-alpha.0..HEAD'), []);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

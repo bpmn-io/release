@@ -6,6 +6,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FIX`: baseline releases off `package.json`, not the highest published version ([#16](https://github.com/bpmn-io/release/pull/16))
+
 ## 0.6.0
 
 * `FEAT`: open GitHub releases after publishing ([#15](https://github.com/bpmn-io/release/pull/15))

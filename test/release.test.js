@@ -32,6 +32,8 @@ function createWorkspace(pkgs) {
   return cwd;
 }
 
+const REMOTE_SHA = 'f00ba4';
+
 /**
  * A fake process runner modelling the git/npm world `release()` observes.
  * Every git/npm invocation funnels through the single `run` seam, so this stub
@@ -45,10 +47,14 @@ function createWorkspace(pkgs) {
  *   whoami?: string|null,
  *   clean?: boolean,
  *   staleAfterInstall?: boolean,
- *   remote?: string|null
+ *   remote?: string|null,
+ *   branch?: string|null,
+ *   pushed?: boolean,
+ *   behind?: boolean,
+ *   remoteError?: string|null
  * }} [world]
  */
-function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true, staleAfterInstall = false, remote = null } = {}) {
+function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-bot', clean = true, staleAfterInstall = false, remote = null, branch = 'main', pushed = true, behind = false, remoteError = null } = {}) {
   const calls = [];
   let installed = false;
 
@@ -86,6 +92,24 @@ function createRunner({ npmVersions = {}, tags = [], changes = {}, whoami = 'ci-
     if (file === 'git' && args[0] === 'remote') {
       if (!remote) throw new Error("No such remote 'origin'");
       return remote;
+    }
+
+    // pre-flight: current branch (absent = detached HEAD)
+    if (file === 'git' && args[0] === 'symbolic-ref') {
+      if (!branch) throw new Error('fatal: ref HEAD is not a symbolic ref');
+      return branch;
+    }
+
+    // pre-flight: remote branch tip (fails e.g. when the remote is unreachable)
+    if (file === 'git' && args[0] === 'ls-remote') {
+      if (remoteError) throw new Error(remoteError);
+      return pushed ? `${REMOTE_SHA}\t${args[2]}` : '';
+    }
+
+    // pre-flight: is the remote tip contained in HEAD?
+    if (file === 'git' && args[0] === 'merge-base') {
+      if (behind) throw new Error('');
+      return '';
     }
 
     // detect: does a release tag exist?
@@ -894,6 +918,102 @@ test('release (end-to-end)', async (t) => {
         release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
         (err) => err instanceof ReleaseError && /uncommitted changes/.test(err.message)
       );
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('pre-flight — rejects a checkout behind the branch it pushes to', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({ branch: 'main', behind: true });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
+        (err) => err instanceof ReleaseError && /behind origin\/main/.test(err.message)
+      );
+
+      // compared against the push destination, failed before any mutating call
+      assert.deepEqual(commands(run, 'git ls-remote'), [ 'git ls-remote origin refs/heads/main' ]);
+      assert.deepEqual(commands(run, 'git merge-base'), [ `git merge-base --is-ancestor ${REMOTE_SHA} HEAD` ]);
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(commands(run, 'git commit'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('pre-flight — rejects a detached HEAD', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({ branch: null });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
+        (err) => err instanceof ReleaseError && /HEAD is detached/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('pre-flight — rejects when the remote cannot be reached', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({ branch: 'main', remoteError: 'Could not resolve host: github.com' });
+
+    try {
+      await assert.rejects(
+        release({ cwd, run, logger: SILENT_LOGGER, prompter: createScriptedPrompter() }),
+        (err) => err instanceof ReleaseError && /Could not reach origin .*Could not resolve host/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('pre-flight — proceeds when the branch is not on the remote yet', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({
+      branch: 'feature',
+      pushed: false,
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'fix: a' ] }
+    });
+
+    try {
+      const result = await release({
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        prompter: createScriptedPrompter({ bump: 'patch', yes: true })
+      });
+
+      assert.deepEqual(result.released, [ { name: '@fix/a', version: '1.0.1' } ]);
+
+      // asked the remote, but nothing to be behind of yet
+      assert.deepEqual(commands(run, 'git ls-remote'), [ 'git ls-remote origin refs/heads/feature' ]);
+      assert.deepEqual(commands(run, 'git merge-base'), []);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

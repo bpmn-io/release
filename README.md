@@ -198,6 +198,10 @@ Change detection and bump proposals start from the `package.json` version, not
 the highest version on npm — a pre-release cut from a feature branch does not
 affect releases from other branches.
 
+Before releasing, `origin` is asked for the tip of the branch the release pushes
+to; the release fails on a detached HEAD or if that tip is not contained in your
+checkout (i.e. the push would not fast-forward).
+
 ## Programmatic API
 
 ```js

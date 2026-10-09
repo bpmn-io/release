@@ -6,6 +6,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FEAT`: fail fast when the checkout is behind the remote branch ([#17](https://github.com/bpmn-io/release/pull/17))
+
 ## 0.6.1
 
 * `FIX`: baseline releases off `package.json`, not the highest published version ([#16](https://github.com/bpmn-io/release/pull/16))

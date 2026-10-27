@@ -183,11 +183,24 @@ non-interactively by passing a `--preid` alongside an explicit, non-`latest`
 Pre-release bump levels start or advance a pre-release, and plain `patch` /
 `minor` / `major` on a pre-release *graduate* it to the final version:
 
-| current | bump (`--preid alpha`) | result |
+| current | bump | result |
 | --- | --- | --- |
-| `1.2.3` | `preminor` | `1.3.0-alpha.0` |
-| `1.3.0-alpha.0` | `prerelease` | `1.3.0-alpha.1` |
-| `1.3.0-alpha.1` | `minor` (graduate) | `1.3.0` |
+| `1.2.3` | `preminor` (`--preid alpha`) | `1.3.0-alpha.0` |
+| `1.3.0-alpha.0` | `prerelease` (`--preid alpha`) | `1.3.0-alpha.1` |
+| `1.3.0-alpha.1` | `minor` (graduate, no `--preid`) | `1.3.0` |
+
+Passing `--preid` declares a pre-release run, so it can never release a stable
+version. Only `pre*` levels, `skip` and an explicit pre-release version carrying
+that identifier (e.g. `1.3.0-rc.2` for `--preid rc`) are accepted:
+
+- interactively, `patch` / `minor` / `major` are not offered; entering a stable
+  level or version (or a pre-release of another identifier) re-asks
+- non-interactively, such a `--bump` — and likewise a stable spec given to
+  `bio-release version` — fails before anything is touched
+- a missing or malformed `--preid` value fails, too
+
+To graduate a pre-release, or to release stable and pre-release packages, run
+without `--preid`.
 
 Because publishing a pre-release move (graduating, or re-cutting after a botched
 publish) may not touch any code since the last release tag, a package sitting on
@@ -242,9 +255,11 @@ version below `latestStable`, the highest stable version on npm. It is required
 for both and must not be `latest`; omit it only for a regular stable bump, which
 defaults to `latest`.
 
-`createInteractivePrompter({ defaultPreid, defaultDistTag })` (readline, the
+`createInteractivePrompter({ preid, distTag })` (readline, the
 default) and `createScriptedPrompter({ bumps, bump, preid, yes })` (head-less)
-are provided.
+are provided. Both take a governed `preid`, which makes the run a pre-release
+run: the scripted prompter throws a `ReleaseError` for a stable spec, the
+interactive one does not offer it (see [Pre-releases](#pre-releases)).
 
 `release()` returns its result rather than calling `process.exit`, and throws a
 `ReleaseError` for expected failures (dirty tree, missing npm auth, missing
@@ -279,8 +294,9 @@ targets specific ones — then stamps it, pins internal workspace dependency ran
 to `^<version>` and runs a single `npm install --package-lock-only` (lockfile
 only, never `node_modules`). No commit, tag, prompt, build or
 publish. A spec is an explicit version (`1.2.3`, `1.2.0-nightly.0`) or a bump
-level (`patch`, `minor`, …). Throws a `ReleaseError` for an invalid spec or an
-override naming an unknown package (nothing is mutated in that case).
+level (`patch`, `minor`, …). Throws a `ReleaseError` for an invalid spec, an
+override naming an unknown package or — when `preid` is given — a stable spec or
+a pre-release of another identifier (nothing is mutated in these cases).
 
 The spec resolver is also exported as `resolveVersion(spec, current, preid)`,
 shared with `release()` so both accept the same grammar.

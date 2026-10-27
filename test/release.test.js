@@ -269,7 +269,7 @@ test('release (end-to-end)', async (t) => {
         logger,
 
         // @fix/a goes pre-release while its stable dependent @fix/c pins it
-        prompter: createScriptedPrompter({ bumps: { '@fix/a': 'preminor', '@fix/c': 'patch' }, preid: 'alpha', yes: true })
+        prompter: createScriptedPrompter({ bumps: { '@fix/a': 'preminor', '@fix/c': 'patch' }, yes: true })
       });
 
       assert.deepEqual(result.released, [
@@ -314,6 +314,39 @@ test('release (end-to-end)', async (t) => {
 
       // a pre-release is published under its non-latest dist-tag, never `latest`
       assert.deepEqual(commands(run, 'npm publish'), [ 'npm publish --tag next' ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('independent — refuses a stable bump when preid is given, before changing anything', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ], releaseConfig: { strategy: 'independent' } },
+      'packages/a': { name: '@fix/a', version: '1.0.0' }
+    });
+
+    const run = createRunner({
+      npmVersions: { '@fix/a': [ '1.0.0' ] },
+      tags: [ '@fix/a@1.0.0' ],
+      changes: { 'packages/a': [ 'feat: next' ] }
+    });
+
+    try {
+      await assert.rejects(
+        () => release({
+          cwd,
+          run,
+          distTag: 'next',
+          logger: SILENT_LOGGER,
+          prompter: createScriptedPrompter({ bump: 'minor', preid: 'rc', yes: true })
+        }),
+        err => err instanceof ReleaseError && /"minor" would release a stable version, but --preid rc was given/.test(err.message)
+      );
+
+      assert.deepEqual(commands(run, 'npm publish'), []);
+      assert.deepEqual(commands(run, 'npm version'), []);
+      assert.deepEqual(commands(run, 'git commit'), []);
+      assert.equal(readJSON(join(cwd, 'packages/a', 'package.json')).version, '1.0.0');
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

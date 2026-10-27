@@ -5,6 +5,8 @@ import { PassThrough } from 'node:stream';
 
 import { createInteractivePrompter, createScriptedPrompter } from '../lib/prompt.js';
 
+import { ReleaseError } from '../lib/error.js';
+
 
 // Drive the interactive prompter with a canned set of answer lines, feeding the
 // next answer only in response to a prompt (a chunk ending in ': ') so lines are
@@ -13,15 +15,18 @@ function interactive(answers, opts = {}) {
   const input = new PassThrough();
   const output = new PassThrough();
   const queue = [ ...answers ];
+  const written = [];
 
   output.on('data', chunk => {
+    written.push(chunk.toString());
+
     if (chunk.toString().endsWith(': ')) {
       const next = queue.shift();
       if (next !== undefined) input.write(`${next}\n`);
     }
   });
 
-  return createInteractivePrompter({ input, output, ...opts });
+  return Object.assign(createInteractivePrompter({ input, output, ...opts }), { written });
 }
 
 
@@ -175,6 +180,77 @@ test('createInteractivePrompter', async (t) => {
     prompter.close();
   });
 
+  await t.test('does not offer stable bumps when preid is governed', async () => {
+    const prompter = interactive([ 'preminor', 'next' ], { preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: 'preminor', preid: 'rc', distTag: 'next' }
+    );
+
+    const [ firstPrompt ] = prompter.written;
+
+    assert.match(firstPrompt, /\[premajor \/ preminor \/ prepatch \/ prerelease \/ skip \| <version>\]/);
+    assert.match(firstPrompt, /prerelease=1\.2\.4-rc\.0 prepatch=1\.2\.4-rc\.0 preminor=1\.3\.0-rc\.0/);
+    assert.doesNotMatch(firstPrompt, /\b(patch|minor|major)\b/);
+
+    prompter.close();
+  });
+
+  await t.test('offers stable bumps when preid is not governed', async () => {
+    const prompter = interactive([ 'minor' ]);
+
+    await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' });
+
+    assert.match(prompter.written[0], /\[patch \/ minor \/ major \/ premajor/);
+
+    prompter.close();
+  });
+
+  await t.test('re-asks when a stable bump is entered and preid is governed', async () => {
+    const prompter = interactive([ 'minor', 'patch', 'preminor', 'next' ], { preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: 'preminor', preid: 'rc', distTag: 'next' }
+    );
+
+    const output = prompter.written.join('');
+
+    assert.match(output, /"minor" would release a stable version, but --preid rc was given/);
+    assert.match(output, /"patch" would release a stable version, but --preid rc was given/);
+
+    prompter.close();
+  });
+
+  await t.test('re-asks on a stable or foreign explicit version when preid is governed', async () => {
+    const prompter = interactive([ '1.3.0', '1.3.0-beta.1', '1.3.0-rc.1', 'next' ], { preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: '1.3.0-rc.1', preid: 'rc', distTag: 'next' }
+    );
+
+    const output = prompter.written.join('');
+
+    assert.match(output, /1\.3\.0 is a stable version/);
+    assert.match(output, /1\.3\.0-beta\.1 does not use the --preid rc identifier/);
+
+    prompter.close();
+  });
+
+  await t.test('still allows "skip" when preid is governed', async () => {
+    const prompter = interactive([ 'skip' ], { preid: 'rc' });
+
+    assert.equal(await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }), 'skip');
+
+    prompter.close();
+  });
+
+  await t.test('rejects an invalid governed preid', () => {
+    assert.throws(() => interactive([], { preid: '' }), ReleaseError);
+  });
+
   await t.test('returns "skip" verbatim', async () => {
     const prompter = interactive([ 'skip' ]);
 
@@ -240,6 +316,60 @@ test('createScriptedPrompter', async (t) => {
       () => prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
       /No valid bump configured for "@test\/a"/
     );
+  });
+
+  await t.test('throws a ReleaseError on a stable bump when preid is given', async () => {
+    for (const bump of [ 'patch', 'minor', 'major', '1.3.0' ]) {
+      const prompter = createScriptedPrompter({ bump, preid: 'rc' });
+
+      await assert.rejects(
+        () => prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+        err => err instanceof ReleaseError && /--preid rc was given/.test(err.message),
+        bump
+      );
+    }
+  });
+
+  await t.test('throws on a per-package stable bump when preid is given', async () => {
+    const prompter = createScriptedPrompter({ bumps: { '@test/b': 'minor' }, bump: 'preminor', preid: 'rc' });
+
+    assert.deepEqual(
+      await prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: 'preminor', preid: 'rc' }
+    );
+
+    await assert.rejects(
+      () => prompter.bump({ name: '@test/b', currentVersion: '1.2.3' }),
+      ReleaseError
+    );
+  });
+
+  await t.test('throws on an explicit pre-release of another identifier when preid is given', async () => {
+    const prompter = createScriptedPrompter({ bump: '1.3.0-beta.0', preid: 'rc' });
+
+    await assert.rejects(
+      () => prompter.bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      /does not use the --preid rc identifier/
+    );
+  });
+
+  await t.test('accepts pre* levels, skip and matching pre-releases when preid is given', async () => {
+    assert.deepEqual(
+      await createScriptedPrompter({ bump: 'prerelease', preid: 'rc' }).bump({ name: '@test/a', currentVersion: '1.3.0-rc.0' }),
+      { type: 'prerelease', preid: 'rc' }
+    );
+    assert.deepEqual(
+      await createScriptedPrompter({ bump: '1.3.0-rc.4', preid: 'rc' }).bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      { type: '1.3.0-rc.4', preid: 'rc' }
+    );
+    assert.equal(
+      await createScriptedPrompter({ bump: 'skip', preid: 'rc' }).bump({ name: '@test/a', currentVersion: '1.2.3' }),
+      'skip'
+    );
+  });
+
+  await t.test('rejects an invalid preid', () => {
+    assert.throws(() => createScriptedPrompter({ bump: 'preminor', preid: '' }), ReleaseError);
   });
 
   await t.test('confirms according to yes', async () => {

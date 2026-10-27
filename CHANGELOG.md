@@ -6,6 +6,8 @@ All notable changes to [@bpmn-io/release](https://github.com/bpmn-io/release) ar
 
 ___Note:__ Yet to be released changes appear here._
 
+* `FEAT`: refuse stable releases when `--preid` is passed ([#20](https://github.com/bpmn-io/release/pull/20))
+
 ## 0.7.0
 
 * `FEAT`: feat: require an explicit dist-tag for backport releases ([#18](https://github.com/bpmn-io/release/pull/18))

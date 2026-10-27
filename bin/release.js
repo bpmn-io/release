@@ -3,6 +3,7 @@
 import { release, ReleaseError } from '../lib/release.js';
 import { setVersion } from '../lib/version.js';
 import { createInteractivePrompter, createScriptedPrompter } from '../lib/prompt.js';
+import { assertPreid, assertPreidSpecs } from '../lib/preid.js';
 
 const HELP = `Usage: bio-release [options]
        bio-release version <version> [options]
@@ -27,7 +28,8 @@ Options:
                        preminor | prepatch | prerelease | skip) or an explicit
                        version (e.g. "--bump 1.2.3").
   --preid <id>         pre-release identifier for pre* bumps (default: alpha),
-                       e.g. "alpha", "beta", "rc", "next".
+                       e.g. "alpha", "beta", "rc", "next". Stable bumps are
+                       refused.
   --dist-tag <tag>     npm dist-tag to publish under. Defaults to "latest" for
                        stable versions. Pre-releases and backports require an
                        explicit, non-"latest" dist-tag (e.g. --dist-tag next,
@@ -77,7 +79,8 @@ Arguments:
 
 Options:
   --cwd <dir>          repository root (default: current directory)
-  --preid <id>         pre-release identifier for pre* bump levels (default: alpha)
+  --preid <id>         pre-release identifier for pre* bump levels (default: alpha),
+                       stable specs are refused
   --no-private         leave private packages untouched instead of stamping them
   -h, --help           show this help
 
@@ -87,6 +90,17 @@ Examples:
   bio-release version 1.2.3 --no-private
   bio-release version @scope/a=1.2.3 @scope/b=minor
 `;
+
+// A flag-like token is not a --preid value (so `--preid --help` prints help).
+const isValue = arg => arg !== undefined && !arg.startsWith('-');
+
+// Checks presence, not truthiness, so a missing value can't leave stable
+// releases open. Runs after parsing so --help wins.
+function validatePreid(opts) {
+  if (opts.preidGiven && !opts.help) {
+    assertPreid(opts.preid);
+  }
+}
 
 function parseArgs(argv) {
   const opts = { bumps: {}, yes: false, interactive: true, build: true, releaseDraft: true };
@@ -101,7 +115,8 @@ function parseArgs(argv) {
     } else if (arg === '--cwd') {
       opts.cwd = argv[++i];
     } else if (arg === '--preid') {
-      opts.preid = argv[++i];
+      opts.preidGiven = true;
+      if (isValue(argv[i + 1])) opts.preid = argv[++i];
     } else if (arg === '--dist-tag') {
       opts.distTag = argv[++i];
     } else if (arg === '--no-private') {
@@ -128,6 +143,8 @@ function parseArgs(argv) {
     }
   }
 
+  validatePreid(opts);
+
   return opts;
 }
 
@@ -142,7 +159,8 @@ function parseVersionArgs(argv) {
     } else if (arg === '--cwd') {
       opts.cwd = argv[++i];
     } else if (arg === '--preid') {
-      opts.preid = argv[++i];
+      opts.preidGiven = true;
+      if (isValue(argv[i + 1])) opts.preid = argv[++i];
     } else if (arg === '--no-private') {
       opts.excludePrivate = true;
     } else if (arg.startsWith('-')) {
@@ -161,6 +179,8 @@ function parseVersionArgs(argv) {
     }
   }
 
+  validatePreid(opts);
+
   return opts;
 }
 
@@ -177,6 +197,8 @@ async function versionMain(argv) {
     console.error(VERSION_HELP);
     process.exit(1);
   }
+
+  assertPreidSpecs([ opts.defaultSpec, ...Object.values(opts.overrides) ], opts.preid);
 
   await setVersion(opts.defaultSpec, {
     cwd: opts.cwd,
@@ -200,6 +222,9 @@ async function main() {
     console.log(HELP);
     return;
   }
+
+  // refuse stable bumps up front, before any I/O
+  assertPreidSpecs([ opts.defaultBump, ...Object.values(opts.bumps) ], opts.preid);
 
   const prompter = opts.interactive
     ? createInteractivePrompter({ preid: opts.preid, distTag: opts.distTag })

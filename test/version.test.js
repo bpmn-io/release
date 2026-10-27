@@ -294,4 +294,61 @@ test('setVersion', async (t) => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  await t.test('rejects a stable spec when preid is given, mutating nothing', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ] },
+      'packages/a': { name: '@fix/a', version: '1.0.0' },
+      'packages/b': { name: '@fix/b', version: '1.0.0' }
+    });
+
+    const run = createRunner();
+
+    try {
+      for (const options of [
+        { defaultSpec: 'minor' },
+        { defaultSpec: '1.2.3' },
+        { defaultSpec: '1.2.0-beta.0' },
+        { defaultSpec: 'preminor', overrides: { '@fix/b': 'patch' } }
+      ]) {
+        await assert.rejects(
+          () => setVersion(options.defaultSpec, { cwd, run, logger: SILENT_LOGGER, preid: 'rc', overrides: options.overrides }),
+          ReleaseError
+        );
+      }
+
+      assert.deepEqual(run.calls, []);
+      assert.equal(readJSON(join(cwd, 'packages/a', 'package.json')).version, '1.0.0');
+      assert.equal(readJSON(join(cwd, 'packages/b', 'package.json')).version, '1.0.0');
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  await t.test('accepts pre* levels and matching pre-releases when preid is given', async () => {
+    const cwd = createWorkspace({
+      '': { private: true, workspaces: [ 'packages/*' ] },
+      'packages/a': { name: '@fix/a', version: '1.0.0' },
+      'packages/b': { name: '@fix/b', version: '1.0.0' }
+    });
+
+    const run = createRunner();
+
+    try {
+      const result = await setVersion('preminor', {
+        cwd,
+        run,
+        logger: SILENT_LOGGER,
+        preid: 'rc',
+        overrides: { '@fix/b': '2.0.0-rc.3' }
+      });
+
+      assert.deepEqual(result, [
+        { name: '@fix/a', version: '1.1.0-rc.0' },
+        { name: '@fix/b', version: '2.0.0-rc.3' }
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });

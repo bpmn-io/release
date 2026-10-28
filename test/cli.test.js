@@ -61,6 +61,25 @@ test('bio-release --preid', async (t) => {
     assert.match(stderr, /--preid requires a value/);
   });
 
+  await t.test('lets the last --preid win', async () => {
+    const { code, stderr } = await cli(cwd, [ '--bump', 'minor', '--preid', 'beta', '--preid', 'rc' ]);
+
+    assert.equal(code, 1);
+    assert.match(stderr, /--preid rc was given/);
+  });
+
+  await t.test('refuses a repeated --preid without a final value', async () => {
+    for (const args of [
+      [ '--bump', 'preminor', '--preid', 'rc', '--preid' ],
+      [ '--bump', 'preminor', '--preid', 'rc', '--preid', '--yes' ]
+    ]) {
+      const { code, stderr } = await cli(cwd, args);
+
+      assert.equal(code, 1, args.join(' '));
+      assert.match(stderr, /--preid requires a value/, args.join(' '));
+    }
+  });
+
   await t.test('refuses a malformed value', async () => {
     const { code, stderr } = await cli(cwd, [ '--preid', 'rc.1', '--bump', 'preminor' ]);
 
@@ -73,6 +92,7 @@ test('bio-release --preid', async (t) => {
       [ '--help', '--preid' ],
       [ '--preid', '--help' ],
       [ '--preid', '', '--help' ],
+      [ '--preid', 'rc', '--preid', '--help' ],
       [ '-h', '--preid', 'r c' ]
     ]) {
       const { code, stdout } = await cli(cwd, args);
@@ -113,6 +133,13 @@ test('bio-release version --preid', async (t) => {
 
   await t.test('refuses a missing value', async () => {
     const { code, stderr } = await cli(cwd, [ 'version', '1.2.3', '--preid' ]);
+
+    assert.equal(code, 1);
+    assert.match(stderr, /--preid requires a value/);
+  });
+
+  await t.test('refuses a repeated --preid without a final value', async () => {
+    const { code, stderr } = await cli(cwd, [ 'version', 'preminor', '--preid', 'rc', '--preid' ]);
 
     assert.equal(code, 1);
     assert.match(stderr, /--preid requires a value/);

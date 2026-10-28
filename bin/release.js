@@ -116,7 +116,7 @@ function parseArgs(argv) {
       opts.cwd = argv[++i];
     } else if (arg === '--preid') {
       opts.preidGiven = true;
-      if (isValue(argv[i + 1])) opts.preid = argv[++i];
+      opts.preid = isValue(argv[i + 1]) ? argv[++i] : undefined;
     } else if (arg === '--dist-tag') {
       opts.distTag = argv[++i];
     } else if (arg === '--no-private') {
@@ -160,7 +160,7 @@ function parseVersionArgs(argv) {
       opts.cwd = argv[++i];
     } else if (arg === '--preid') {
       opts.preidGiven = true;
-      if (isValue(argv[i + 1])) opts.preid = argv[++i];
+      opts.preid = isValue(argv[i + 1]) ? argv[++i] : undefined;
     } else if (arg === '--no-private') {
       opts.excludePrivate = true;
     } else if (arg.startsWith('-')) {
